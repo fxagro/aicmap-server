@@ -375,48 +375,73 @@ Sitemap: ${SITE}/sitemap.xml
       <!-- MODAL BANTUAN BUY & EDIT OWNER -->
       <script>
         function openBuyHotelModal() {
-          const email = prompt('Masukkan Email SSO Edu MyTriv Anda untuk membeli hotel virtual ini:');
-          if (!email) return;
-          fetch('/api/hotels/ownership/buy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: email,
-              hotel_slug: '${slug}',
-              hotel_name: '${esc(h.name)}',
-              city: '${esc(h.city_name || h.city || '')}',
-              country: '${esc(h.country_name || h.country || '')}',
-              stars: ${h.stars || 5}
+          const savedEmail = localStorage.getItem('mytriv_sso_email') || 'mytriv.com@gmail.com';
+          const email = prompt('Masukkan Email SSO Edu MyTriv Anda untuk membeli hotel virtual ini:', savedEmail);
+          if (!email || !email.trim()) return;
+          const cleanEmail = email.trim();
+          localStorage.setItem('mytriv_sso_email', cleanEmail);
+
+          const payload = {
+            email: cleanEmail,
+            hotel_slug: '${slug}',
+            hotel_name: '${esc(h.name)}',
+            city: '${esc(h.city_name || h.city || '')}',
+            country: '${esc(h.country_name || h.country || '')}',
+            stars: ${h.stars || 5}
+          };
+
+          function sendBuy(endpoint) {
+            return fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            }).then(r => r.json());
+          }
+
+          sendBuy('/api/hotels/ownership/buy')
+            .then(res => {
+              if (res.error) {
+                // Fallback to /maps/api/
+                return sendBuy('/maps/api/hotels/ownership/buy');
+              }
+              return res;
             })
-          })
-          .then(r => r.json())
-          .then(res => {
-            if (res.error) alert('❌ Gagal: ' + res.error);
-            else {
-              alert('🎉 ' + res.message);
-              location.reload();
-            }
-          })
-          .catch(e => alert('API Error: ' + e.message));
+            .then(res => {
+              if (res.error) {
+                alert('❌ Gagal: ' + res.error);
+              } else {
+                alert('🎉 ' + res.message + '
+
+💰 Sisa Saldo TrivCoin Anda: ' + (res.new_balance !== undefined ? res.new_balance.toLocaleString() : 'Terupdate') + ' TrivCoin');
+                location.reload();
+              }
+            })
+            .catch(e => alert('API Error: ' + e.message));
         }
 
         function openOwnerEditModal() {
-          const email = prompt('Masukkan Email Pemilik Hotel:');
-          if (!email) return;
-          const headline = prompt('Pesan Promo/Headline untuk pengunjung:', '${esc(h.custom_headline || '')}');
+          const savedEmail = localStorage.getItem('mytriv_sso_email') || 'mytriv.com@gmail.com';
+          const email = prompt('Masukkan Email Pemilik Hotel:', savedEmail);
+          if (!email || !email.trim()) return;
+          const cleanEmail = email.trim();
+          localStorage.setItem('mytriv_sso_email', cleanEmail);
+
+          const headline = prompt('Pesan Promo / Headline untuk pengunjung:', '${esc(h.custom_headline || '')}');
           const review = prompt('Ulasan / Rekomendasi Pribadi Anda:', '${esc(h.custom_review || '')}');
           const affUrl = prompt('URL Link Referral / Affiliate Anda (Opsional):', '${esc(h.custom_affiliate_url || '')}');
+
+          const payload = {
+            email: cleanEmail,
+            hotel_slug: '${slug}',
+            custom_headline: headline,
+            custom_review: review,
+            custom_affiliate_url: affUrl
+          };
 
           fetch('/api/hotels/ownership/update-page', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: email,
-              hotel_slug: '${slug}',
-              custom_headline: headline,
-              custom_review: review,
-              custom_affiliate_url: affUrl
-            })
+            body: JSON.stringify(payload)
           })
           .then(r => r.json())
           .then(res => {
