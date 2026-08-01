@@ -564,19 +564,21 @@ Sitemap: ${SITE}/sitemap.xml
         WHERE c.slug = $1 AND cc.slug = $2`, [city, country]);
       if (!rows.length) return res.status(404).send('Not found');
       const c = rows[0];
+      const totalRes = await pool.query('SELECT count(*)::int AS n FROM hotels WHERE city_id = $1', [c.id]);
+      const totalCount = totalRes.rows[0].n;
       const hotels = await pool.query(`
         SELECT h.* FROM hotels h JOIN cities c ON c.id = h.city_id
-        WHERE c.id = $1 ORDER BY h.rating DESC NULLS LAST, h.reviews DESC NULLS LAST LIMIT 60`, [c.id]);
+        WHERE c.id = $1 ORDER BY h.rating DESC NULLS LAST, h.reviews DESC NULLS LAST LIMIT 300`, [c.id]);
       const budget = hotels.rows.slice().sort((a, b) => a.price_idr - b.price_idr)[0];
       const lux = hotels.rows.slice().sort((a, b) => b.price_idr - a.price_idr)[0];
 
-      const title = `Hotel di ${c.name}, ${c.country_name} — ${hotels.rows.length} Hotel Terbaik | MyTriv Hotels`;
-      const desc = `Temukan ${hotels.rows.length} hotel terbaik di ${c.name}${budget ? `, mulai ${fmtPrice(budget.price_idr)}` : ''}. Bandingkan harga & booking online di Booking.com, Agoda, Trip.com, Traveloka.`;
+      const title = `Hotel di ${c.name}, ${c.country_name} — ${totalCount} Hotel Terbaik | MyTriv Hotels`;
+      const desc = `Temukan ${totalCount} hotel terbaik di ${c.name}${budget ? `, mulai ${fmtPrice(budget.price_idr)}` : ''}. Bandingkan harga & booking online di Booking.com, Agoda, Trip.com, Traveloka.`;
       const body = `
 <div class="crumbs"><a href="/hotels">Beranda</a> › <a href="/hotels/${country}">${esc(c.country_name)}</a> › <b>${esc(c.name)}</b></div>
 <div class="hero"><h1>Hotel di ${esc(c.name)}</h1><p>${desc}</p></div>
 <div class="wrap">
-  <h2>${hotels.rows.length} hotel tersedia di ${esc(c.name)}</h2>
+  <h2>${totalCount} hotel tersedia di ${esc(c.name)}</h2>
   <div class="grid">
     ${hotels.rows.map(n => `<div class="hcard-mini">
       <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
