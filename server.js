@@ -150,17 +150,24 @@ app.get('/api/monopoly/properties', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 2. Get Player State & Owned Properties
+// 2. Get Player State & Owned Properties (Includes Virtual Hotels)
 app.get('/api/monopoly/player/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const player = await pool.query(`SELECT * FROM monopoly_players WHERE member_id = $1`, [id]);
     if (!player.rowCount) return res.status(404).json({ error: 'Player tidak ditemukan' });
 
-    const owned = await pool.query(`SELECT * FROM monopoly_properties WHERE owner_id = $1`, [id]);
+    const pData = player.rows[0];
+    const ownedProps = await pool.query(`SELECT * FROM monopoly_properties WHERE owner_id = $1`, [id]);
+    const ownedHotels = await pool.query(`SELECT * FROM virtual_hotel_ownership WHERE LOWER(owner_email) = LOWER($1)`, [pData.email]);
+
+    const totalCount = (ownedProps.rowCount || 0) + (ownedHotels.rowCount || 0);
+
     res.json({
-      ...player.rows[0],
-      owned_properties: owned.rows
+      ...pData,
+      owned_properties: ownedProps.rows,
+      owned_virtual_hotels: ownedHotels.rows,
+      total_properties_count: totalCount
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
