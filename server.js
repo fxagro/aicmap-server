@@ -1302,6 +1302,16 @@ module.exports = { pool }; // used by seo router tests
 // 👑 VIRTUAL HOTEL OWNERSHIP & MARKETPLACE ENDPOINTS
 // =================================================================
 
+// GET P2P Marketplace hotel listings (must be declared BEFORE :slug route)
+app.get('/api/hotels/ownership/marketplace', async (req, res) => {
+  try {
+    const q = await pool.query('SELECT * FROM virtual_hotel_ownership WHERE is_for_sale = TRUE ORDER BY sale_price ASC LIMIT 100');
+    res.json({ listings: q.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET ownership status for hotel
 app.get('/api/hotels/ownership/:slug', async (req, res) => {
   try {
@@ -1363,6 +1373,7 @@ app.post('/api/hotels/ownership/buy', async (req, res) => {
     }
 
     const price = (stars || 5) * 2000;
+    const currentBal = Number(player.balance) || 0;
     
     if (currentBal < price) {
       return res.status(400).json({ 
@@ -1382,7 +1393,7 @@ app.post('/api/hotels/ownership/buy', async (req, res) => {
       success: true,
       message: `🎉 Selamat! @${player.name} resmi menjadi Pemilik Virtual Hotel ${hotel_name || hotel_slug}!`,
       ownership: ins.rows[0],
-      new_balance: finalBal - price
+      new_balance: currentBal - price
     });
   } catch (err) {
     console.error('Buy Hotel API Error:', err);
@@ -1419,12 +1430,3 @@ app.post('/api/hotels/ownership/update-page', async (req, res) => {
   }
 });
 
-// GET P2P Marketplace hotel listings
-app.get('/api/hotels/ownership/marketplace', async (req, res) => {
-  try {
-    const q = await pool.query('SELECT * FROM virtual_hotel_ownership WHERE is_for_sale = TRUE ORDER BY sale_price ASC LIMIT 100');
-    res.json({ listings: q.rows });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
