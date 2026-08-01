@@ -321,6 +321,115 @@ Sitemap: ${SITE}/sitemap.xml
       <div class="addr">📍 ${esc(loc)}${h.address ? ' — ' + esc(h.address) : ''}${h.phone ? ' · ☎ ' + esc(h.phone) : ''}</div>
       <div class="tags">${am.map(a => `<span class="tag">${esc(a)}</span>`).join('')}</div>
       <div class="price">Tarif mulai: <b style="color:#34D399;font-size:18px;">${price}</b> / malam</div>
+      
+      <!-- VIRTUAL HOTEL OWNER & PROMO WIDGET -->
+      <div id="virtual-owner-section" style="margin-top:20px; margin-bottom:20px; padding:20px; background:linear-gradient(135deg, #0d1b2a, #1b263b); border:1.5px solid #00F0FF; border-radius:14px; box-shadow:0 0 25px rgba(0,240,255,0.2);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg, #00F0FF, #3B82F6); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:bold; color:#000; box-shadow:0 0 10px #00F0FF;">
+              ${h.owner_name ? esc(h.owner_name.charAt(0).toUpperCase()) : '🏰'}
+            </div>
+            <div>
+              <div style="color:#00F0FF; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">
+                ${h.owner_name ? '👑 VIRTUAL HOTEL OWNER' : '🎲 VIRTUAL MONOPOLY HOTEL'}
+              </div>
+              <div style="color:#FFF; font-size:20px; font-weight:bold;">
+                ${h.owner_name ? esc(h.owner_name) : 'Belum Ada Pemilik Virtual'}
+              </div>
+              <div style="color:#94A3B8; font-size:13px; margin-top:2px;">
+                ${h.owner_name ? `Harga Beli: ${fmtPrice(h.purchase_price || 10000)} TrivCoin` : `Harga Hak Milik Virtual: ${(h.stars || 5) * 2000} TrivCoin`}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            ${h.owner_name ? `
+              <button onclick="openOwnerEditModal()" class="cta cta-primary" style="padding:10px 18px; font-size:13px; cursor:pointer;">✏️ Edit Halaman Owner</button>
+            ` : `
+              <button onclick="openBuyHotelModal()" class="cta cta-primary" style="padding:10px 22px; font-size:14px; background:linear-gradient(135deg, #10B981, #059669); cursor:pointer;">🛒 Beli Hotel Virtual Ini</button>
+            `}
+          </div>
+        </div>
+
+        ${h.custom_headline ? `
+          <div style="margin-top:16px; padding:12px 16px; background:rgba(0,240,255,0.08); border-left:4px solid #00F0FF; border-radius:6px; color:#E2E8F0; font-size:14px; font-weight:600;">
+            📢 <span style="color:#00F0FF;">Pesan Pemilik:</span> "${esc(h.custom_headline)}"
+          </div>
+        ` : ''}
+
+        ${h.custom_review ? `
+          <div style="margin-top:10px; color:#CBD5E1; font-size:13px; line-height:1.6; font-style:italic;">
+            ✍️ "${esc(h.custom_review)}"
+          </div>
+        ` : ''}
+
+        ${h.custom_affiliate_url ? `
+          <div style="margin-top:14px;">
+            <a href="${esc(h.custom_affiliate_url)}" target="_blank" rel="nofollow noopener" class="cta" style="background:linear-gradient(135deg, #EC4899, #8B5CF6); color:#FFF; font-weight:bold; width:100%; text-align:center; padding:12px; display:block; border-radius:8px; text-decoration:none;">
+              🌟 PROMO KHUSUS PEMILIK: Klik Booking Via Referral Owner
+            </a>
+          </div>
+        ` : ''}
+      </div>
+
+      <!-- MODAL BANTUAN BUY & EDIT OWNER -->
+      <script>
+        function openBuyHotelModal() {
+          const email = prompt('Masukkan Email SSO Edu MyTriv Anda untuk membeli hotel virtual ini:');
+          if (!email) return;
+          fetch('/api/hotels/ownership/buy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: email,
+              hotel_slug: '${slug}',
+              hotel_name: '${esc(h.name)}',
+              city: '${esc(h.city_name || h.city || '')}',
+              country: '${esc(h.country_name || h.country || '')}',
+              stars: ${h.stars || 5}
+            })
+          })
+          .then(r => r.json())
+          .then(res => {
+            if (res.error) alert('❌ Gagal: ' + res.error);
+            else {
+              alert('🎉 ' + res.message);
+              location.reload();
+            }
+          })
+          .catch(e => alert('API Error: ' + e.message));
+        }
+
+        function openOwnerEditModal() {
+          const email = prompt('Masukkan Email Pemilik Hotel:');
+          if (!email) return;
+          const headline = prompt('Pesan Promo/Headline untuk pengunjung:', '${esc(h.custom_headline || '')}');
+          const review = prompt('Ulasan / Rekomendasi Pribadi Anda:', '${esc(h.custom_review || '')}');
+          const affUrl = prompt('URL Link Referral / Affiliate Anda (Opsional):', '${esc(h.custom_affiliate_url || '')}');
+
+          fetch('/api/hotels/ownership/update-page', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: email,
+              hotel_slug: '${slug}',
+              custom_headline: headline,
+              custom_review: review,
+              custom_affiliate_url: affUrl
+            })
+          })
+          .then(r => r.json())
+          .then(res => {
+            if (res.error) alert('❌ Error: ' + res.error);
+            else {
+              alert('✨ ' + res.message);
+              location.reload();
+            }
+          })
+          .catch(e => alert('API Error: ' + e.message));
+        }
+      </script>
+
       <div class="ctas">
         <a class="cta cta-primary" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Booking.com — Pesan Sekarang</a>
         <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Agoda — Cek Harga</a>
