@@ -36,6 +36,7 @@ game Virtual Monopoly, aggregator hotel, dan integrasi Travelpayouts.
 | `monopoly_properties` | Properti virtual (landmark/hotel) |
 | `monopoly_listings` | Listing marketplace P2P |
 | `token_transactions` | Riwayat transaksi TrivCoin |
+| `hotels` | Katalog hotel kurasi dunia (64 hotel, 30+ kota) — sumber utama `/api/hotels/*` |
 
 ## Menjalankan
 
@@ -79,18 +80,23 @@ Akses health check: `curl http://127.0.0.1:3099/health`
 ### Hotel
 | Method | Path | Keterangan |
 |---|---|---|
-| GET | `/api/hotels/search` | Cari hotel (city, harga, bintang, amenity) — dataset statis |
-| GET | `/api/hotels/:id` | Detail hotel |
+| GET | `/api/hotels/search` | Cari hotel dari DB `hotels` (city, harga, bintang, amenity), fallback ke dataset statis jika kosong |
+| GET | `/api/hotels/:id` | Detail hotel (dari DB, fallback ke dataset statis) |
 | POST | `/api/hotels/redeem-trivcoin` | Tukar TrivCoin jadi voucher diskon hotel |
 
 ### Travelpayouts
 | Method | Path | Keterangan |
 |---|---|---|
 | POST | `/api/travelpayouts/generate-link` | Generate partner link affiliate |
-| GET | `/api/travelpayouts/hotels/live-city` | Auto-fetch hotel live per kota (Hotellook API) |
+| GET | `/api/travelpayouts/hotels/live-city` | Hotel per kota — Hotellook API **dimatikan permanen sejak 20 Okt 2025**, endpoint ini kini memakai DB `hotels` sebagai sumber data + partner link |
 | GET | `/api/travelpayouts/config` | Ambil konfigurasi (marker, enabled) |
 | POST | `/api/travelpayouts/config` | Simpan konfigurasi |
 | GET | `/api/travelpayouts/hotels/search` | Hotel search dengan affiliate URL |
+
+> **Catatan Hotellook**: API `engine.hotellook.com` deprecated & nonaktif sejak 20 Okt 2025
+> (affiliate program Hotellook ditutup total oleh Travelpayouts). Tidak ada API hotel pengganti
+> dari Travelpayouts. Strategi: data hotel kurasi di tabel `hotels` + redirect booking
+> langsung ke Agoda/Booking/Trip/Traveloka via partner link.
 
 ### Community
 | Method | Path | Keterangan |

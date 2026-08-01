@@ -841,41 +841,78 @@ const WORLDWIDE_HOTELS = [
   }
 ];
 
-// Hotel Search & Map Filter Endpoint
-app.get('/api/hotels/search', (req, res) => {
+// Hotel Search & Map Filter Endpoint (DB-first, fallback ke WORLDWIDE_HOTELS)
+app.get('/api/hotels/search', async (req, res) => {
   try {
-    const { city, min_price, max_price, stars, amenity } = req.query;
-    let filtered = WORLDWIDE_HOTELS;
+    const { city, min_price, max_price, stars, amenity, limit = 50 } = req.query;
+    const conditions = [];
+    const params = [];
 
+    if (city) {
+      params.push(`%${city.toLowerCase()}%`);
+      conditions.push(`(LOWER(h.city) LIKE $${params.length} OR LOWER(h.country) LIKE $${params.length} OR LOWER(h.name) LIKE $${params.length})`);
+    }
+    if (min_price) {
+      params.push(parseInt(min_price));
+      conditions.push(`h.price_idr >= $${params.length}`);
+    }
+    if (max_price) {
+      params.push(parseInt(max_price));
+      conditions.push(`h.price_idr <= $${params.length}`);
+    }
+    if (stars && stars !== '0') {
+      params.push(parseInt(stars));
+      conditions.push(`h.stars >= $${params.length}`);
+    }
+    if (amenity) {
+      params.push(`%${amenity.toLowerCase()}%`);
+      conditions.push(`h.amenities::text ILIKE $${params.length}`);
+    }
+    params.push(parseInt(limit) || 50);
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const { rows } = await pool.query(
+      `SELECT id, name, city, country, lat, lng, stars, rating, reviews, price_idr, price_formatted, currency, image, amenities, description
+       FROM hotels h ${where} ORDER BY h.rating DESC LIMIT $${params.length}`,
+      params
+    );
+
+    const source = 'db';
+    if (rows.length > 0) {
+      return res.json({ total: rows.length, source, hotels: rows.map(r => ({ ...r, amenities: Array.isArray(r.amenities) ? r.amenities : (r.amenities || []) })) });
+    }
+
+    // Fallback: in-memory catalog lama
+    let filtered = WORLDWIDE_HOTELS;
     if (city) {
       const q = city.toLowerCase();
       filtered = filtered.filter(h => h.city.toLowerCase().includes(q) || h.country.toLowerCase().includes(q) || h.name.toLowerCase().includes(q));
     }
-    if (min_price) {
-      filtered = filtered.filter(h => h.price_idr >= parseInt(min_price));
-    }
-    if (max_price) {
-      filtered = filtered.filter(h => h.price_idr <= parseInt(max_price));
-    }
-    if (stars && stars !== '0') {
-      filtered = filtered.filter(h => h.stars >= parseInt(stars));
-    }
-    if (amenity) {
-      filtered = filtered.filter(h => h.amenities.some(a => a.toLowerCase().includes(amenity.toLowerCase())));
-    }
+    if (min_price) filtered = filtered.filter(h => h.price_idr >= parseInt(min_price));
+    if (max_price) filtered = filtered.filter(h => h.price_idr <= parseInt(max_price));
+    if (stars && stars !== '0') filtered = filtered.filter(h => h.stars >= parseInt(stars));
+    if (amenity) filtered = filtered.filter(h => h.amenities.some(a => a.toLowerCase().includes(amenity.toLowerCase())));
 
-    res.json({
-      total: filtered.length,
-      hotels: filtered
-    });
+    res.json({ total: filtered.length, source: 'memory', hotels: filtered });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Hotel Detail Endpoint
-app.get('/api/hotels/:id', (req, res) => {
+// Hotel Detail Endpoint (DB-first)
+app.get('/api/hotels/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const hotel = WORLDWIDE_HOTELS.find(h => h.id === id);
+    const numId = parseInt(id);
+    let hotel = null;
+
+    if (Number.isInteger(numId) && numId > 0) {
+      const { rows } = await pool.query(
+        `SELECT id, name, city, country, lat, lng, stars, rating, reviews, price_idr, price_formatted, currency, image, amenities, description FROM hotels WHERE id = $1::INTEGER`,
+        [numId]
+      );
+      if (rows.length > 0) hotel = { ...rows[0], amenities: Array.isArray(rows[0].amenities) ? rows[0].amenities : (rows[0].amenities || []) };
+    }
+
+    if (!hotel) hotel = WORLDWIDE_HOTELS.find(h => h.id === id);
     if (!hotel) return res.status(404).json({ error: 'Hotel tidak ditemukan' });
     res.json(hotel);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -993,6 +1030,31 @@ app.get('/api/travelpayouts/hotels/live-city', async (req, res) => {
       console.log("Fallback to local database for city:", city);
     }
 
+    // Fallback ke database lokal jika Hotellook (deprecated sejak Okt 2025) tidak merespons
+    if (!Array.isArray(rawHotels) || rawHotels.length === 0) {
+      try {
+        const { rows } = await pool.query(
+          `SELECT id, name, city, country, lat, lng, stars, rating, reviews, price_idr, image, amenities, description
+           FROM hotels WHERE LOWER(city) = LOWER($1) OR LOWER(country) = LOWER($1)
+           ORDER BY rating DESC LIMIT 20`,
+          [city.trim()]
+        );
+        if (rows.length > 0) {
+          rawHotels = rows.map(r => ({
+            hotelId: r.id,
+            hotelName: r.name,
+            priceFrom: r.price_idr,
+            stars: r.stars,
+            rating: r.rating,
+            location: { lat: r.lat, lon: r.lng },
+            _local: true
+          }));
+        }
+      } catch (dbErr) {
+        console.log("DB fallback error:", dbErr.message);
+      }
+    }
+
     // Process and enrich with Partner Links API
     const enrichedHotels = (Array.isArray(rawHotels) && rawHotels.length > 0) ? rawHotels.map(h => ({
       id: h.hotelId || h.id,
@@ -1003,7 +1065,7 @@ app.get('/api/travelpayouts/hotels/live-city', async (req, res) => {
       rating: h.rating || 4.9,
       lat: h.location ? h.location.lat : -6.2088,
       lng: h.location ? h.location.lon : 106.8456,
-      img: `https://photos.hotellook.com/image_v2/limit/h${h.hotelId || 10001}_0/800/520.jpg`,
+      img: h._local ? (h.image || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&auto=format&fit=crop&q=80') : `https://photos.hotellook.com/image_v2/limit/h${h.hotelId || 10001}_0/800/520.jpg`,
       desc: `Hotel bintang ${h.stars || 5} terverifikasi live di ${city}.`,
       partner_links: {
         agoda: generateTravelpayoutsPartnerLink(`https://www.agoda.com/search?text=${encodeURIComponent(h.hotelName || h.name)}`, '4115', `map_${city}`),
