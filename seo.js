@@ -322,11 +322,11 @@ Sitemap: ${SITE}/sitemap.xml
       <div class="tags">${am.map(a => `<span class="tag">${esc(a)}</span>`).join('')}</div>
       <div class="price">Tarif mulai: <b style="color:#34D399;font-size:18px;">${price}</b> / malam</div>
       <div class="ctas">
-        <a class="cta cta-primary" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" rel="nofollow noopener">Booking.com — Pesan Sekarang</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" rel="nofollow noopener">Agoda — Cek Harga</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.trip)}&partner=trip&slug=${encodeURIComponent(slug)}&hotel=1" rel="nofollow noopener">Trip.com — Cek Harga</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.traveloka)}&partner=traveloka&slug=${encodeURIComponent(slug)}&hotel=1" rel="nofollow noopener">Traveloka — Cek Harga</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.expedia)}&partner=expedia&slug=${encodeURIComponent(slug)}&hotel=1" rel="nofollow noopener">Expedia — Cek Harga</a>
+        <a class="cta cta-primary" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Booking.com — Pesan Sekarang</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Agoda — Cek Harga</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.trip)}&partner=trip&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Trip.com — Cek Harga</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.traveloka)}&partner=traveloka&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Traveloka — Cek Harga</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.expedia)}&partner=expedia&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Expedia — Cek Harga</a>
       </div>
     </div>
   </div>
