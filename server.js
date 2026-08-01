@@ -336,15 +336,16 @@ app.get('/api/leaderboard', async (req, res) => {
 // 🎲 VIRTUAL MONOPOLY GAME ENDPOINTS
 // =================================================================
 
-// GET Monopoly Leaderboard
+// GET Monopoly Leaderboard (Includes Virtual Hotels)
 app.get('/api/monopoly/leaderboard', async (req, res) => {
   try {
     const r = await pool.query(`
       SELECT p.member_id, p.name, p.country, p.city, p.subscription_tier, p.balance,
-             COUNT(prop.id) AS total_properties
+             (COUNT(DISTINCT prop.id) + COUNT(DISTINCT vho.id)) AS total_properties
       FROM monopoly_players p
       LEFT JOIN monopoly_properties prop ON prop.owner_id = p.member_id
-      GROUP BY p.member_id, p.name, p.country, p.city, p.subscription_tier, p.balance
+      LEFT JOIN virtual_hotel_ownership vho ON LOWER(vho.owner_email) = LOWER(p.email)
+      GROUP BY p.member_id, p.name, p.country, p.city, p.subscription_tier, p.balance, p.email
       ORDER BY p.balance DESC LIMIT 50
     `);
     res.json(r.rows);
