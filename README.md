@@ -66,10 +66,15 @@ Akses health check: `curl http://127.0.0.1:3099/health`
 |---|---|---|
 | GET | `/api/monopoly/properties` | Semua properti + pemilik |
 | GET | `/api/monopoly/player/:id` | State pemain + properti yang dimiliki |
-
-> Endpoint game (roll-dice, buy/upgrade property, quiz, marketplace, leaderboard, credit-subscription)
-> masih dipanggil frontend namun **belum ada di server.js** (sedang ditambahkan kembali).
-> Lihat `monopoly.js` di frontend untuk daftar lengkap yang dibutuhkan.
+| GET | `/api/monopoly/leaderboard` | Papan peringkat taipan (balance + jumlah properti) |
+| POST | `/api/monopoly/roll-dice` | Kocok dadu, mendarat di properti, bayar sewa jika ada pemilik |
+| POST | `/api/monopoly/buy-property` | Beli properti yang belum dimiliki |
+| POST | `/api/monopoly/upgrade-property` | Upgrade level properti (biaya 50% harga) |
+| POST | `/api/monopoly/answer-quiz` | Jawab kuis, reward TrivCoin jika benar |
+| POST | `/api/monopoly/credit-subscription` | Simulasi subscribe, bonus TrivCoin sesuai tier |
+| GET | `/api/monopoly/marketplace/listings` | Listing marketplace P2P yang aktif |
+| POST | `/api/monopoly/marketplace/list-property` | Pasang properti di marketplace P2P |
+| POST | `/api/monopoly/marketplace/buy-listing` | Beli properti dari marketplace P2P |
 
 ### Hotel
 | Method | Path | Keterangan |
@@ -97,8 +102,8 @@ Akses health check: `curl http://127.0.0.1:3099/health`
 | PATCH/DELETE | `/api/members/:id` | Verify / hapus member (admin token) |
 | DELETE | `/api/events/:id` | Hapus event (admin token) |
 
-> Endpoint community di atas dipanggil oleh `community.js` frontend namun **belum ada
-> di server.js saat ini** (sedang ditambahkan kembali).
+> Endpoint admin memakai header `x-admin-token`. Nilai default token: `mytriv-admin-2026`
+> (dapat di-override via env `AIMAP_ADMIN_TOKEN`).
 
 ## Deployment
 
