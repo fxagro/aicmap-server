@@ -872,7 +872,7 @@ app.get('/api/hotels/search', async (req, res) => {
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT id, name, city, country, lat, lng, stars, rating, reviews, price_idr, price_formatted, currency, image, amenities, description
+      `SELECT id, name, city, country, lat, lng, stars, rating, reviews, price_idr, price_formatted, currency, image, amenities, description, slug
        FROM hotels h ${where} ORDER BY h.rating DESC LIMIT $${params.length}`,
       params
     );
@@ -894,6 +894,21 @@ app.get('/api/hotels/search', async (req, res) => {
     if (amenity) filtered = filtered.filter(h => h.amenities.some(a => a.toLowerCase().includes(amenity.toLowerCase())));
 
     res.json({ total: filtered.length, source: 'memory', hotels: filtered });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Record a hotel search (trending analytics) — fire and forget
+app.post('/api/searches', async (req, res) => {
+  try {
+    const { q, result_count } = req.body || {};
+    if (!q) return res.status(400).json({ error: 'missing q' });
+    await pool.query(
+      `INSERT INTO searches (query, result_count, session_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT DO NOTHING`,
+      [String(q).slice(0, 200), parseInt(result_count) || 0, (req.headers['x-session'] || 'map').slice(0, 64)]
+    );
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
