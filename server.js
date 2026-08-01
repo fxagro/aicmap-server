@@ -15,6 +15,9 @@ const eduPool = new Pool({
   connectionString: process.env.EDU_DATABASE_URL || 'postgres://mytriv:mytriv_password_2026@127.0.0.1:5432/mytriv'
 });
 
+// Admin token untuk console admin (header: x-admin-token)
+const ADMIN_TOKEN = process.env.AIMAP_ADMIN_TOKEN || 'mytriv-admin-2026';
+
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'aicmap-monopoly-api' }));
 
@@ -107,6 +110,477 @@ app.get('/api/monopoly/player/:id', async (req, res) => {
       ...player.rows[0],
       owned_properties: owned.rows
     });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// =================================================================
+// 🌍 COMMUNITY ENDPOINTS (members, events, chat, leaderboard)
+// =================================================================
+
+// GET Members (list, optional country/city filter)
+app.get('/api/members', async (req, res) => {
+  try {
+    const { country, city } = req.query;
+    let sql = `SELECT id, name, role, country, province, city, lat, lng, bio, avatar_color, is_verified, created_at FROM members`;
+    const conds = [];
+    const vals = [];
+    if (country) { conds.push(`country ILIKE $${vals.length + 1}`); vals.push('%' + country + '%'); }
+    if (city) { conds.push(`city ILIKE $${vals.length + 1}`); vals.push('%' + city + '%'); }
+    if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
+    sql += ' ORDER BY created_at DESC LIMIT 500';
+    const r = await pool.query(sql, vals);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST Register Member
+app.post('/api/members', async (req, res) => {
+  try {
+    const { name, role = 'Builder', country, province, city, lat, lng, bio, email } = req.body || {};
+    if (!name || !country) return res.status(400).json({ error: 'Nama dan Negara wajib diisi' });
+
+    const colors = ['#00f0ff', '#ff00ff', '#00ff88', '#ffaa00', '#7c3aed', '#f43f5e', '#22d3ee', '#facc15'];
+    const avatar_color = colors[Math.floor(Math.random() * colors.length)];
+
+    const r = await pool.query(
+      `INSERT INTO members (name, role, country, province, city, lat, lng, bio, email, avatar_color)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, name, role, country, city, lat, lng, bio, avatar_color, is_verified, created_at`,
+      [name, role, country, province || null, city || null, lat || null, lng || null, bio || null, email || null, avatar_color]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH Verify / Update Member (admin)
+app.patch('/api/members/:id', async (req, res) => {
+  try {
+    const token = req.headers['x-admin-token'];
+    if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Token admin salah' });
+
+    const { id } = req.params;
+    const { is_verified, role } = req.body || {};
+    const sets = [];
+    const vals = [];
+    if (typeof is_verified === 'boolean') { sets.push(`is_verified = $${vals.length + 1}`); vals.push(is_verified); }
+    if (role) { sets.push(`role = $${vals.length + 1}`); vals.push(role); }
+    if (!sets.length) return res.status(400).json({ error: 'Tidak ada field untuk diupdate' });
+    vals.push(id);
+    const r = await pool.query(`UPDATE members SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${vals.length} RETURNING *`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Member tidak ditemukan' });
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE Member (admin)
+app.delete('/api/members/:id', async (req, res) => {
+  try {
+    const token = req.headers['x-admin-token'];
+    if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Token admin salah' });
+
+    const { id } = req.params;
+    const r = await pool.query(`DELETE FROM members WHERE id = $1 RETURNING id`, [id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Member tidak ditemukan' });
+    res.json({ ok: true, deleted_id: id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET Events (list)
+app.get('/api/events', async (req, res) => {
+  try {
+    const { country } = req.query;
+    let sql = `SELECT * FROM events`;
+    const vals = [];
+    if (country) { sql += ` WHERE country ILIKE $1`; vals.push('%' + country + '%'); }
+    sql += ' ORDER BY created_at DESC LIMIT 100';
+    const r = await pool.query(sql, vals);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST Create Event
+app.post('/api/events', async (req, res) => {
+  try {
+    const { title, description, country, city, lat, lng, event_type = 'Meetup', join_url, host_name } = req.body || {};
+    if (!title || !country) return res.status(400).json({ error: 'Judul dan Negara wajib diisi' });
+
+    const r = await pool.query(
+      `INSERT INTO events (title, description, country, city, lat, lng, event_type, join_url, host_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [title, description || null, country, city || null, lat || null, lng || null, event_type, join_url || null, host_name || null]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE Event (admin)
+app.delete('/api/events/:id', async (req, res) => {
+  try {
+    const token = req.headers['x-admin-token'];
+    if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Token admin salah' });
+
+    const { id } = req.params;
+    const r = await pool.query(`DELETE FROM events WHERE id = $1 RETURNING id`, [id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Event tidak ditemukan' });
+    res.json({ ok: true, deleted_id: id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET Chat Messages
+app.get('/api/chat', async (req, res) => {
+  try {
+    const { country, limit = 50 } = req.query;
+    const lim = Math.min(parseInt(limit) || 50, 200);
+    let sql = `SELECT cm.*, m.name AS resolved_name FROM chat_messages cm
+               LEFT JOIN members m ON cm.member_id = m.id`;
+    const vals = [];
+    if (country) { sql += ` WHERE cm.country ILIKE $${vals.length + 1}`; vals.push('%' + country + '%'); }
+    sql += ` ORDER BY cm.created_at DESC LIMIT $${vals.length + 1}`;
+    vals.push(lim);
+    const r = await pool.query(sql, vals);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST Send Chat Message
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { member_name = 'Guest', country = 'Global', message } = req.body || {};
+    if (!message) return res.status(400).json({ error: 'Pesan tidak boleh kosong' });
+
+    const r = await pool.query(
+      `INSERT INTO chat_messages (member_name, country, message) VALUES ($1,$2,$3) RETURNING *`,
+      [String(member_name).slice(0, 40), String(country).slice(0, 40), String(message).slice(0, 280)]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET Leaderboard (cities, countries, recent members)
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const cities = await pool.query(`
+      SELECT city, country, COUNT(*) AS members
+      FROM members WHERE city IS NOT NULL AND city <> ''
+      GROUP BY city, country ORDER BY members DESC LIMIT 20`);
+    const countries = await pool.query(`
+      SELECT country, COUNT(*) AS members
+      FROM members WHERE country IS NOT NULL AND country <> ''
+      GROUP BY country ORDER BY members DESC LIMIT 20`);
+    const recent = await pool.query(`
+      SELECT id, name, role, country, city, avatar_color, is_verified, created_at
+      FROM members ORDER BY created_at DESC LIMIT 10`);
+    res.json({ cities: cities.rows, countries: countries.rows, recent: recent.rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// =================================================================
+// 🎲 VIRTUAL MONOPOLY GAME ENDPOINTS
+// =================================================================
+
+// GET Monopoly Leaderboard
+app.get('/api/monopoly/leaderboard', async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT p.member_id, p.name, p.country, p.city, p.subscription_tier, p.balance,
+             COUNT(prop.id) AS total_properties
+      FROM monopoly_players p
+      LEFT JOIN monopoly_properties prop ON prop.owner_id = p.member_id
+      GROUP BY p.member_id, p.name, p.country, p.city, p.subscription_tier, p.balance
+      ORDER BY p.balance DESC LIMIT 50
+    `);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST Credit Subscription (simulate subscribe, grant coin bonus)
+app.post('/api/monopoly/credit-subscription', async (req, res) => {
+  try {
+    const { member_id, subscription_tier = 'basic_edu' } = req.body || {};
+    if (!member_id) return res.status(400).json({ error: 'member_id wajib' });
+    const mId = parseInt(member_id);
+
+    const p = await pool.query(`SELECT * FROM monopoly_players WHERE member_id = $1`, [mId]);
+    if (!p.rowCount) return res.status(404).json({ error: 'Player tidak ditemukan' });
+
+    const tier = String(subscription_tier).toLowerCase();
+    const current = (p.rows[0].subscription_tier || 'free').toLowerCase();
+    let bonus = 0;
+    if (tier === 'pro_edu' && current !== 'pro_edu') bonus = 10000;
+    else if (tier === 'basic_edu' && current === 'free') bonus = 1500;
+
+    const r = await pool.query(
+      `UPDATE monopoly_players SET subscription_tier = $1, balance = balance + $2::INTEGER, updated_at = NOW()
+       WHERE member_id = $3 RETURNING *`,
+      [tier, bonus, mId]
+    );
+
+    if (bonus > 0) {
+      await pool.query(
+        `INSERT INTO token_transactions (member_id, amount, source_type, description)
+         VALUES ($1, $2, 'subscription_bonus', $3)`,
+        [mId, bonus, `Bonus Token SSO Upgrade Langganan (${tier.toUpperCase()})`]
+      );
+    }
+
+    res.json({
+      ok: true,
+      subscription_tier: tier,
+      coin_bonus: bonus,
+      balance: r.rows[0].balance,
+      message: `Langganan ${tier.toUpperCase()} berhasil${bonus > 0 ? `! +${bonus} TrivCoin bonus` : ''}!`
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST Roll Dice & Move
+app.post('/api/monopoly/roll-dice', async (req, res) => {
+  try {
+    const { member_id } = req.body || {};
+    if (!member_id) return res.status(401).json({ error: 'Silakan Login SSO terlebih dahulu.' });
+    const mId = parseInt(member_id);
+
+    const p = await pool.query(`SELECT * FROM monopoly_players WHERE member_id = $1`, [mId]);
+    if (!p.rowCount) return res.status(404).json({ error: 'Player tidak ditemukan' });
+    const player = p.rows[0];
+
+    const props = await pool.query(`
+      SELECT p.*, pl.name AS owner_name, pl.country AS owner_country
+      FROM monopoly_properties p
+      LEFT JOIN monopoly_players pl ON p.owner_id = pl.member_id
+      ORDER BY p.id ASC
+    `);
+    if (!props.rowCount) return res.status(500).json({ error: 'Belum ada properti di papan' });
+
+    const dice1 = Math.floor(Math.random() * 6) + 1;
+    const dice2 = Math.floor(Math.random() * 6) + 1;
+    const totalStep = dice1 + dice2;
+
+    // Land on property based on current position + dice step
+    const currentIdx = player.current_property_id
+      ? props.rows.findIndex(x => x.id === player.current_property_id)
+      : -1;
+    const landIdx = (currentIdx < 0 ? 0 : currentIdx + totalStep) % props.rows.length;
+    const landed = props.rows[landIdx];
+
+    await pool.query(
+      `UPDATE monopoly_players SET current_property_id = $1, updated_at = NOW() WHERE member_id = $2`,
+      [landed.id, mId]
+    );
+
+    let rentNotice = null;
+    if (landed.owner_id && parseInt(landed.owner_id) !== mId) {
+      const rent = (landed.base_rent || 0) * (landed.level || 1);
+      if (parseInt(player.balance) >= rent) {
+        await pool.query(`UPDATE monopoly_players SET balance = balance - $1::INTEGER WHERE member_id = $2`, [rent, mId]);
+        await pool.query(`UPDATE monopoly_players SET balance = balance + $1::INTEGER WHERE member_id = $2`, [rent, landed.owner_id]);
+        await pool.query(
+          `INSERT INTO token_transactions (member_id, amount, source_type, description)
+           VALUES ($1, -$2::INTEGER, 'rent_payment', $3)`,
+          [mId, rent, `Bayar sewa ke ${landed.owner_name || 'pemilik'} (${landed.name})`]
+        );
+        rentNotice = `💰 Anda membayar sewa ${rent} TrivCoin kepada ${landed.owner_name || 'pemilik'} untuk ${landed.name}.`;
+      } else {
+        rentNotice = `⚠️ Saldo Anda tidak cukup untuk membayar sewa ${rent} TrivCoin di ${landed.name}.`;
+      }
+    }
+
+    // Provide a quiz related to the landed property
+    let quiz = null;
+    try {
+      const qz = await pool.query(
+        `SELECT * FROM edu_quizzes WHERE ($1::text IS NULL OR category ILIKE $1) ORDER BY RANDOM() LIMIT 1`,
+        [landed.quiz_category || null]
+      );
+      if (qz.rowCount) {
+        const q = qz.rows[0];
+        quiz = {
+          id: q.id,
+          question: q.question,
+          options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options,
+          reward_coins: q.reward_coins || 50,
+          explanation: q.explanation || ''
+        };
+      }
+    } catch (e) {
+      console.error('Quiz fetch error:', e.message);
+    }
+
+    res.json({
+      dice: [dice1, dice2],
+      total_step: totalStep,
+      landed_property: landed,
+      rent_notice: rentNotice,
+      quiz
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST Buy Property
+app.post('/api/monopoly/buy-property', async (req, res) => {
+  try {
+    const { member_id, property_id } = req.body || {};
+    if (!member_id || !property_id) return res.status(400).json({ error: 'member_id dan property_id wajib' });
+    const mId = parseInt(member_id);
+    const pId = parseInt(property_id);
+
+    const prop = await pool.query(`SELECT * FROM monopoly_properties WHERE id = $1`, [pId]);
+    if (!prop.rowCount) return res.status(404).json({ error: 'Properti tidak ditemukan' });
+    if (prop.rows[0].owner_id) return res.status(400).json({ error: 'Properti ini sudah dimiliki orang lain' });
+
+    const pl = await pool.query(`SELECT balance FROM monopoly_players WHERE member_id = $1`, [mId]);
+    if (!pl.rowCount) return res.status(404).json({ error: 'Player tidak ditemukan' });
+    if (parseInt(pl.rows[0].balance) < parseInt(prop.rows[0].price)) {
+      return res.status(400).json({ error: `Saldo TrivCoin tidak cukup. Dibutuhkan ${prop.rows[0].price} TrivCoin.` });
+    }
+
+    await pool.query(`UPDATE monopoly_players SET balance = balance - $1::INTEGER, current_property_id = $2, updated_at = NOW() WHERE member_id = $3`, [prop.rows[0].price, pId, mId]);
+    await pool.query(`UPDATE monopoly_properties SET owner_id = $1, level = 1 WHERE id = $2`, [mId, pId]);
+    await pool.query(
+      `INSERT INTO token_transactions (member_id, amount, source_type, description)
+       VALUES ($1, -$2::INTEGER, 'property_buy', $3)`,
+      [mId, prop.rows[0].price, `Beli properti ${prop.rows[0].name}`]
+    );
+
+    res.json({ ok: true, message: `🎉 Berhasil membeli ${prop.rows[0].name}!` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST Upgrade Property
+app.post('/api/monopoly/upgrade-property', async (req, res) => {
+  try {
+    const { member_id, property_id } = req.body || {};
+    if (!member_id || !property_id) return res.status(400).json({ error: 'member_id dan property_id wajib' });
+    const mId = parseInt(member_id);
+    const pId = parseInt(property_id);
+
+    const prop = await pool.query(`SELECT * FROM monopoly_properties WHERE id = $1`, [pId]);
+    if (!prop.rowCount) return res.status(404).json({ error: 'Properti tidak ditemukan' });
+    if (parseInt(prop.rows[0].owner_id) !== mId) return res.status(400).json({ error: 'Hanya pemilik properti yang bisa upgrade' });
+
+    const upgradeCost = Math.round(parseInt(prop.rows[0].price) * 0.5);
+    const pl = await pool.query(`SELECT balance FROM monopoly_players WHERE member_id = $1`, [mId]);
+    if (parseInt(pl.rows[0].balance) < upgradeCost) {
+      return res.status(400).json({ error: `Saldo TrivCoin tidak cukup untuk upgrade (${upgradeCost} TrivCoin).` });
+    }
+
+    await pool.query(`UPDATE monopoly_players SET balance = balance - $1::INTEGER, updated_at = NOW() WHERE member_id = $2`, [upgradeCost, mId]);
+    await pool.query(`UPDATE monopoly_properties SET level = level + 1 WHERE id = $1`, [pId]);
+    await pool.query(
+      `INSERT INTO token_transactions (member_id, amount, source_type, description)
+       VALUES ($1, -$2::INTEGER, 'property_upgrade', $3)`,
+      [mId, upgradeCost, `Upgrade properti ${prop.rows[0].name} ke Level ${prop.rows[0].level + 1}`]
+    );
+
+    res.json({ ok: true, message: `🎉 ${prop.rows[0].name} naik ke Level ${prop.rows[0].level + 1}!` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST Answer Quiz
+app.post('/api/monopoly/answer-quiz', async (req, res) => {
+  try {
+    const { member_id, quiz_id, selected_option } = req.body || {};
+    if (!member_id || !quiz_id || typeof selected_option !== 'number') {
+      return res.status(400).json({ error: 'member_id, quiz_id, dan selected_option wajib' });
+    }
+    const mId = parseInt(member_id);
+
+    const qz = await pool.query(`SELECT * FROM edu_quizzes WHERE id = $1`, [parseInt(quiz_id)]);
+    if (!qz.rowCount) return res.status(404).json({ error: 'Kuis tidak ditemukan' });
+    const q = qz.rows[0];
+
+    const correct = selected_option === q.correct_answer;
+
+    if (correct) {
+      await pool.query(`UPDATE monopoly_players SET balance = balance + $1::INTEGER, quizzes_solved = quizzes_solved + 1, updated_at = NOW() WHERE member_id = $2`, [q.reward_coins || 50, mId]);
+      await pool.query(
+        `INSERT INTO token_transactions (member_id, amount, source_type, description)
+         VALUES ($1, $2, 'quiz_reward', $3)`,
+        [mId, q.reward_coins || 50, `Reward Kuis Edu: ${q.category}`]
+      );
+    }
+
+    res.json({ correct, explanation: q.explanation || 'Jawaban benar!' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET P2P Marketplace Listings
+app.get('/api/monopoly/marketplace/listings', async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT l.id, l.asking_price, l.status, l.created_at,
+             p.id AS property_id, p.name AS property_name, p.category, p.city, p.country, p.level,
+             pl.name AS seller_name, pl.member_id AS seller_id, pl.subscription_tier AS seller_tier
+      FROM monopoly_listings l
+      JOIN monopoly_properties p ON l.property_id = p.id
+      JOIN monopoly_players pl ON l.seller_id = pl.member_id
+      WHERE l.status = 'active'
+      ORDER BY l.created_at DESC
+    `);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST List Property on Marketplace
+app.post('/api/monopoly/marketplace/list-property', async (req, res) => {
+  try {
+    const { member_id, property_id, asking_price } = req.body || {};
+    if (!member_id || !property_id || !asking_price) return res.status(400).json({ error: 'member_id, property_id, asking_price wajib' });
+    const mId = parseInt(member_id);
+    const pId = parseInt(property_id);
+    const price = parseInt(asking_price);
+
+    const prop = await pool.query(`SELECT * FROM monopoly_properties WHERE id = $1`, [pId]);
+    if (!prop.rowCount) return res.status(404).json({ error: 'Properti tidak ditemukan' });
+    if (parseInt(prop.rows[0].owner_id) !== mId) return res.status(400).json({ error: 'Hanya pemilik properti yang bisa menjual' });
+
+    const existing = await pool.query(`SELECT id FROM monopoly_listings WHERE property_id = $1 AND status = 'active'`, [pId]);
+    if (existing.rowCount) return res.status(400).json({ error: 'Properti ini sudah terpasang di marketplace' });
+
+    await pool.query(
+      `INSERT INTO monopoly_listings (property_id, seller_id, asking_price, status) VALUES ($1, $2, $3, 'active')`,
+      [pId, mId, price]
+    );
+    res.json({ ok: true, message: `🏷 ${prop.rows[0].name} berhasil dipasang di Marketplace dengan harga ${price} TrivCoin!` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST Buy Marketplace Listing
+app.post('/api/monopoly/marketplace/buy-listing', async (req, res) => {
+  try {
+    const { member_id, listing_id } = req.body || {};
+    if (!member_id || !listing_id) return res.status(400).json({ error: 'member_id dan listing_id wajib' });
+    const mId = parseInt(member_id);
+    const lId = parseInt(listing_id);
+
+    const listing = await pool.query(`SELECT * FROM monopoly_listings WHERE id = $1 AND status = 'active'`, [lId]);
+    if (!listing.rowCount) return res.status(404).json({ error: 'Listing tidak ditemukan atau sudah tidak aktif' });
+    const li = listing.rows[0];
+    if (parseInt(li.seller_id) === mId) return res.status(400).json({ error: 'Tidak bisa membeli properti sendiri' });
+
+    const buyer = await pool.query(`SELECT balance FROM monopoly_players WHERE member_id = $1`, [mId]);
+    if (!buyer.rowCount) return res.status(404).json({ error: 'Player tidak ditemukan' });
+    if (parseInt(buyer.rows[0].balance) < parseInt(li.asking_price)) {
+      return res.status(400).json({ error: `Saldo TrivCoin tidak cukup. Dibutuhkan ${li.asking_price} TrivCoin.` });
+    }
+
+    const prop = await pool.query(`SELECT name FROM monopoly_properties WHERE id = $1`, [li.property_id]);
+
+    await pool.query(`UPDATE monopoly_players SET balance = balance - $1::INTEGER, updated_at = NOW() WHERE member_id = $2`, [li.asking_price, mId]);
+    await pool.query(`UPDATE monopoly_players SET balance = balance + $1::INTEGER, updated_at = NOW() WHERE member_id = $2`, [li.asking_price, li.seller_id]);
+    await pool.query(`UPDATE monopoly_properties SET owner_id = $1 WHERE id = $2`, [mId, li.property_id]);
+    await pool.query(`UPDATE monopoly_listings SET status = 'sold' WHERE id = $1`, [lId]);
+    await pool.query(
+      `INSERT INTO token_transactions (member_id, amount, source_type, description)
+       VALUES ($1, -$2::INTEGER, 'marketplace_buy', $3)`,
+      [mId, li.asking_price, `Beli ${prop.rows[0].name} dari marketplace P2P`]
+    );
+    await pool.query(
+      `INSERT INTO token_transactions (member_id, amount, source_type, description)
+       VALUES ($1, $2, 'marketplace_sell', $3)`,
+      [li.seller_id, li.asking_price, `Penjualan ${prop.rows[0].name} di marketplace P2P`]
+    );
+
+    res.json({ ok: true, message: `🎉 Berhasil membeli ${prop.rows[0].name} seharga ${li.asking_price} TrivCoin!` });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
