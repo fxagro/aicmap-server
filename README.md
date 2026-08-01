@@ -14,6 +14,7 @@ game Virtual Monopoly, aggregator hotel, dan integrasi Travelpayouts.
 /srv/aicmap-server/
 ├── server.js         # Seluruh endpoint API (single-file)
 ├── package.json
+├── db/               # Skema & seed database (hotels, dsb.)
 └── node_modules/
 ```
 
@@ -36,7 +37,7 @@ game Virtual Monopoly, aggregator hotel, dan integrasi Travelpayouts.
 | `monopoly_properties` | Properti virtual (landmark/hotel) |
 | `monopoly_listings` | Listing marketplace P2P |
 | `token_transactions` | Riwayat transaksi TrivCoin |
-| `hotels` | Katalog hotel kurasi dunia (64 hotel, 30+ kota) — sumber utama `/api/hotels/*` |
+| `hotels` | Katalog hotel kurasi dunia (121 hotel, 96 kota, 49 negara) — sumber utama `/api/hotels/*` |
 
 ## Menjalankan
 
