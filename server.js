@@ -948,6 +948,27 @@ app.get('/api/analytics/summary', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// SEO hub data for the /hotels landing page (top countries, cities, hotels, faq)
+app.get('/api/seo/hub', async (req, res) => {
+  try {
+    const [countries, cities, hotels, total] = await Promise.all([
+      pool.query(`SELECT cc.slug, cc.name, count(h.id) AS hotel_count FROM countries cc
+                  LEFT JOIN cities c ON c.country_code = cc.code
+                  LEFT JOIN hotels h ON h.city_id = c.id
+                  GROUP BY cc.slug, cc.name HAVING count(h.id) > 0 ORDER BY hotel_count DESC LIMIT 12`),
+      pool.query(`SELECT c.slug, c.name, cc.slug AS country_slug, count(h.id) AS hotel_count FROM cities c
+                  JOIN countries cc ON cc.code = c.country_code
+                  LEFT JOIN hotels h ON h.city_id = c.id
+                  GROUP BY c.slug, c.name, cc.slug HAVING count(h.id) > 0 ORDER BY hotel_count DESC LIMIT 12`),
+      pool.query(`SELECT h.name, h.slug, h.stars, h.rating, h.price_idr, h.image, c.name AS city_name, cc.slug AS country_slug
+                  FROM hotels h LEFT JOIN cities c ON c.id = h.city_id LEFT JOIN countries cc ON cc.code = c.country_code
+                  WHERE h.slug IS NOT NULL ORDER BY h.rating DESC NULLS LAST, h.reviews DESC NULLS LAST LIMIT 12`),
+      pool.query('SELECT count(*) AS c FROM hotels'),
+    ]);
+    res.json({ total_hotels: total.rows[0].c, countries: countries.rows, cities: cities.rows, hotels: hotels.rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Hotel Detail Endpoint (DB-first)
 app.get('/api/hotels/:id', async (req, res) => {
   try {
