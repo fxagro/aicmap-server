@@ -100,12 +100,19 @@ function amenities(h) {
 function partnerLinks(generatePartnerLink, hotel, citySlug) {
   const marker = '126699';
   const name = hotel.name || '';
+  const cc = (hotel.country_code || '').toLowerCase();
+  const cityS = hotel.city_slug || citySlug || '';
   const sub = `mytriv_${citySlug || 'hotel'}`;
+  // Agoda: /search?text= redirects to homepage; city-path keeps the hotel name in the search box.
+  const agoda = (cityS && cc)
+    ? `https://www.agoda.com/city/${encodeURIComponent(cityS)}-${cc}.html?cid=1893836&tag=${marker}&text=${encodeURIComponent(name)}`
+    : `https://www.agoda.com/search?text=${encodeURIComponent(name)}&cid=1893836&tag=${marker}`;
   return {
-    agoda: `https://www.agoda.com/search?text=${encodeURIComponent(name)}&cid=1893836&tag=${marker}`,
+    agoda,
     booking: `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(name)}&aid=${marker}`,
     trip: `https://www.trip.com/hotels/list?keyword=${encodeURIComponent(name)}&Allianceid=${marker}`,
     traveloka: `https://www.traveloka.com/en-id/hotel/search?spec=${encodeURIComponent(name)}&marker=${marker}`,
+    expedia: `https://www.expedia.com/Hotel-Search?destination=${encodeURIComponent(name)}`,
   };
 }
 
@@ -179,7 +186,7 @@ footer a{color:var(--cy)}
 <header><a href="/" class="logo">MyTriv <span>Hotels</span></a><nav>
 <a href="/hotels">Hotel Map</a><a href="/hotels/indonesia">Indonesia</a><a href="/hotels/japan">Japan</a><a href="/hotels/thailand">Thailand</a></nav></header>
 ${body}
-<footer><p>MyTriv Hotels — Interactive World Hotel Map. Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka).</p>
+<footer><p>MyTriv Hotels — Interactive World Hotel Map. Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka, Expedia).</p>
 <p><a href="/sitemap.xml">Sitemap</a> · <a href="/hotels">Peta Interaktif</a> · © 2026 MyTriv</p></footer>
 </body>
 </html>`;
@@ -265,7 +272,7 @@ Sitemap: ${SITE}/sitemap.xml
     try {
       const { slug } = req.params;
       const { rows } = await pool.query(`
-        SELECT h.*, c.name AS city_name, c.slug AS city_slug, cc.name AS country_name, cc.slug AS country_slug
+        SELECT h.*, c.name AS city_name, c.slug AS city_slug, c.country_code, cc.name AS country_name, cc.slug AS country_slug
         FROM hotels h
         LEFT JOIN cities c ON c.id = h.city_id
         LEFT JOIN countries cc ON cc.code = c.country_code
@@ -288,7 +295,7 @@ Sitemap: ${SITE}/sitemap.xml
       }
 
       const title = `${h.name} — Harga & Booking ${loc} | MyTriv Hotels`;
-      const desc = `Cek harga terbaik ${h.name} di ${loc}. ${am.slice(0, 4).join(', ')}. Bandingkan harga Booking.com, Agoda, Trip.com & Traveloka. Booking online terpercaya.`;
+      const desc = `Cek harga terbaik ${h.name} di ${loc}. ${am.slice(0, 4).join(', ')}. Bandingkan harga Booking.com, Agoda, Trip.com, Traveloka & Expedia. Booking online terpercaya.`;
       const ogImage = hotelImage(h, 800);
 
       const schema = {
@@ -319,6 +326,7 @@ Sitemap: ${SITE}/sitemap.xml
         <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" rel="nofollow noopener">Agoda — Cek Harga</a>
         <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.trip)}&partner=trip&slug=${encodeURIComponent(slug)}&hotel=1" rel="nofollow noopener">Trip.com — Cek Harga</a>
         <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.traveloka)}&partner=traveloka&slug=${encodeURIComponent(slug)}&hotel=1" rel="nofollow noopener">Traveloka — Cek Harga</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.expedia)}&partner=expedia&slug=${encodeURIComponent(slug)}&hotel=1" rel="nofollow noopener">Expedia — Cek Harga</a>
       </div>
     </div>
   </div>
@@ -334,7 +342,7 @@ Sitemap: ${SITE}/sitemap.xml
 
   <h2>Pertanyaan Umum tentang ${esc(h.name)}</h2>
   <div class="faq">
-    <details><summary>Berapa harga menginap di ${esc(h.name)}?</summary><p>Harga mulai sekitar ${price} per malam, tergantung tipe kamar dan musim. Gunakan tombol di atas untuk cek harga real-time di Booking.com, Agoda, Trip.com, dan Traveloka.</p></details>
+    <details><summary>Berapa harga menginap di ${esc(h.name)}?</summary><p>Harga mulai sekitar ${price} per malam, tergantung tipe kamar dan musim. Gunakan tombol di atas untuk cek harga real-time di Booking.com, Agoda, Trip.com, Traveloka, dan Expedia.</p></details>
     <details><summary>Di mana lokasi ${esc(h.name)}?</summary><p>Hotel ini berlokasi di ${esc(loc)}${h.lat ? ` (koordinat ${h.lat}, ${h.lng})` : ''}. Anda bisa melihat posisinya di peta interaktif kami.</p></details>
     <details><summary>Apa fasilitas di ${esc(h.name)}?</summary><p>Fasilitas utama: ${am.join(', ')}.</p></details>
     <details><summary>Bagaimana cara booking ${esc(h.name)}?</summary><p>Klik tombol Booking.com atau Agoda di halaman ini. Anda diarahkan ke situs partner resmi untuk harga & ketersediaan terbaru tanpa biaya tambahan.</p></details>

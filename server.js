@@ -938,7 +938,7 @@ app.get('/api/hotels/search', async (req, res) => {
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT h.id, h.name, h.city, h.country, h.lat, h.lng, h.stars, h.rating, h.reviews, h.price_idr, h.price_formatted, h.currency, h.image, h.amenities, h.description, h.slug
+      `SELECT h.id, h.name, h.city, h.country, h.lat, h.lng, h.stars, h.rating, h.reviews, h.price_idr, h.price_formatted, h.currency, h.image, h.amenities, h.description, h.slug, c.slug AS city_slug, c.country_code AS country_code
        FROM hotels h LEFT JOIN cities c ON c.id = h.city_id LEFT JOIN countries cc ON cc.code = c.country_code
        ${where} ORDER BY h.rating DESC NULLS LAST, h.stars DESC NULLS LAST LIMIT $${params.length}`,
       params
@@ -1045,7 +1045,7 @@ app.get('/api/hotels/:id', async (req, res) => {
 
     if (Number.isInteger(numId) && numId > 0) {
       const { rows } = await pool.query(
-        `SELECT id, name, city, country, lat, lng, stars, rating, reviews, price_idr, price_formatted, currency, image, amenities, description FROM hotels WHERE id = $1::INTEGER`,
+        `SELECT h.id, h.name, h.city, h.country, h.lat, h.lng, h.stars, h.rating, h.reviews, h.price_idr, h.price_formatted, h.currency, h.image, h.amenities, h.description, h.slug, c.slug AS city_slug, c.country_code AS country_code FROM hotels h LEFT JOIN cities c ON c.id = h.city_id WHERE h.id = $1::INTEGER`,
         [numId]
       );
       if (rows.length > 0) hotel = { ...rows[0], image: rows[0].image || hotelImgUrl(rows[0].id + '|' + rows[0].name), amenities: Array.isArray(rows[0].amenities) ? rows[0].amenities : (rows[0].amenities || []) };
@@ -1296,3 +1296,135 @@ const createSeoRouter = require('./seo');
 app.use(createSeoRouter({ pool, generatePartnerLink: generateTravelpayoutsPartnerLink }));
 
 module.exports = { pool }; // used by seo router tests
+
+
+// =================================================================
+// 👑 VIRTUAL HOTEL OWNERSHIP & MARKETPLACE ENDPOINTS
+// =================================================================
+
+// GET ownership status for hotel
+app.get('/api/hotels/ownership/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const q = await pool.query('SELECT * FROM virtual_hotel_ownership WHERE hotel_slug = $1', [slug]);
+    if (q.rowCount > 0) {
+      return res.json({ owned: true, ownership: q.rows[0] });
+    }
+    return res.json({ owned: false, base_price: 10000 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// BUY unowned hotel with TrivCoin balance (Auto-Sync SSO & Auto-Register User)
+app.post('/api/hotels/ownership/buy', async (req, res) => {
+  try {
+    const { email, hotel_slug, hotel_name, city, country, stars } = req.body || {};
+    if (!email || !hotel_slug) return res.status(400).json({ error: 'Email SSO wajib diisi' });
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 1. Check or Auto-Create Player in monopoly_players
+    let pRes = await pool.query('SELECT * FROM monopoly_players WHERE LOWER(email) = LOWER($1)', [cleanEmail]);
+    let player;
+
+    if (!pRes.rowCount) {
+      // Sync with Edu DB
+      let pName = cleanEmail.split('@')[0];
+      let subTier = 'pro_edu';
+      try {
+        const eduQuery = await eduPool.query(
+          `SELECT id, email, name, plan, "extensionPlan" FROM users WHERE LOWER(email) = LOWER($1)`,
+          [cleanEmail]
+        );
+        if (eduQuery.rowCount > 0 && eduQuery.rows[0].name) {
+          pName = eduQuery.rows[0].name;
+        }
+      } catch (err) {
+        console.error('Edu DB lookup error:', err.message);
+      }
+
+      // Create new player with 50,000 TrivCoin initial bonus for testing & hotel buying!
+      const initialBalance = 50000;
+      const newP = await pool.query(
+        `INSERT INTO monopoly_players (name, email, subscription_tier, balance, country, city)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [pName, cleanEmail, subTier, initialBalance, country || 'Indonesia', city || 'Jakarta']
+      );
+      player = newP.rows[0];
+    } else {
+      player = pRes.rows[0];
+    }
+
+    // 2. Check if already owned
+    const oRes = await pool.query('SELECT * FROM virtual_hotel_ownership WHERE hotel_slug = $1', [hotel_slug]);
+    if (oRes.rowCount > 0) {
+      return res.status(400).json({ error: `Hotel ini sudah dimiliki oleh @${oRes.rows[0].owner_name}` });
+    }
+
+    const price = (stars || 5) * 2000;
+    
+    if (currentBal < price) {
+      return res.status(400).json({ 
+        error: `Saldo TrivCoin kurang! Butuh ${price.toLocaleString()} TrivCoin, saldo Anda ${currentBal.toLocaleString()} TrivCoin.` 
+      });
+    }
+
+    // 3. Deduct coins & insert ownership
+    await pool.query('UPDATE monopoly_players SET balance = balance - $1::INTEGER WHERE member_id = $2', [price, player.member_id]);
+    const ins = await pool.query(
+      `INSERT INTO virtual_hotel_ownership (hotel_slug, hotel_name, city, country, stars, owner_email, owner_name, purchase_price)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [hotel_slug, hotel_name || hotel_slug, city || 'World', country || 'Global', stars || 5, cleanEmail, player.name || cleanEmail.split('@')[0], price]
+    );
+
+    res.json({
+      success: true,
+      message: `🎉 Selamat! @${player.name} resmi menjadi Pemilik Virtual Hotel ${hotel_name || hotel_slug}!`,
+      ownership: ins.rows[0],
+      new_balance: finalBal - price
+    });
+  } catch (err) {
+    console.error('Buy Hotel API Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// UPDATE owner page content (Custom headline, review, affiliate URL, and sale price)
+app.post('/api/hotels/ownership/update-page', async (req, res) => {
+  try {
+    const { email, hotel_slug, custom_headline, custom_review, custom_affiliate_url, is_for_sale, sale_price } = req.body || {};
+    if (!email || !hotel_slug) return res.status(400).json({ error: 'Email and hotel_slug required' });
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    const oRes = await pool.query('SELECT * FROM virtual_hotel_ownership WHERE hotel_slug = $1', [hotel_slug]);
+    if (!oRes.rowCount) return res.status(404).json({ error: 'Hotel ownership record not found' });
+    const ownership = oRes.rows[0];
+
+    if (ownership.owner_email.toLowerCase() !== cleanEmail) {
+      return res.status(403).json({ error: 'Anda bukan pemilik sah dari hotel virtual ini!' });
+    }
+
+    const up = await pool.query(
+      `UPDATE virtual_hotel_ownership 
+       SET custom_headline = $1, custom_review = $2, custom_affiliate_url = $3, is_for_sale = $4, sale_price = $5, updated_at = CURRENT_TIMESTAMP
+       WHERE hotel_slug = $6 RETURNING *`,
+      [custom_headline || null, custom_review || null, custom_affiliate_url || null, is_for_sale || false, sale_price || 0, hotel_slug]
+    );
+
+    res.json({ success: true, message: 'Halaman & Promo Pemilik Hotel berhasil diperbarui live!', ownership: up.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET P2P Marketplace hotel listings
+app.get('/api/hotels/ownership/marketplace', async (req, res) => {
+  try {
+    const q = await pool.query('SELECT * FROM virtual_hotel_ownership WHERE is_for_sale = TRUE ORDER BY sale_price ASC LIMIT 100');
+    res.json({ listings: q.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
