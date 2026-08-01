@@ -912,6 +912,42 @@ app.post('/api/searches', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Analytics summary for admin dashboard (page views, clicks, trends)
+app.get('/api/analytics/summary', async (req, res) => {
+  try {
+    const days = Math.min(parseInt(req.query.days) || 7, 90);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+    const [pv, clicks, clicksByPartner, topPaths, topCities, topHotels, topSearches] = await Promise.all([
+      pool.query('SELECT count(*) AS c, count(*) FILTER (WHERE is_bot = false) AS human FROM page_views WHERE created_at >= $1', [since]),
+      pool.query('SELECT count(*) AS c FROM affiliate_clicks WHERE created_at >= $1', [since]),
+      pool.query('SELECT partner, count(*) AS c FROM affiliate_clicks WHERE created_at >= $1 GROUP BY partner ORDER BY c DESC', [since]),
+      pool.query(`SELECT path, count(*) AS c FROM page_views WHERE created_at >= $1 AND path LIKE '/hotel/%' GROUP BY path ORDER BY c DESC LIMIT 15`, [since]),
+      pool.query(`SELECT path, count(*) AS c FROM page_views WHERE created_at >= $1 AND path LIKE '/hotels/%' GROUP BY path ORDER BY c DESC LIMIT 15`, [since]),
+      pool.query(`SELECT h.name, h.slug, count(p.id) AS c FROM page_views p LEFT JOIN hotels h ON h.slug = NULLIF(regexp_replace(p.path, '^/hotel/', ''), p.path) WHERE p.created_at >= $1 AND p.path LIKE '/hotel/%' GROUP BY h.name, h.slug ORDER BY c DESC LIMIT 15`, [since]),
+      pool.query('SELECT query, count(*) AS c FROM searches WHERE created_at >= $1 GROUP BY query ORDER BY c DESC LIMIT 15', [since]),
+    ]);
+
+    const estRevenue = clicks.rows[0].c * 0.35; // estimasi USD/click ~$0.35 dari hotel OTA
+    res.json({
+      days,
+      generated_at: new Date().toISOString(),
+      totals: {
+        page_views: parseInt(pv.rows[0].c),
+        human_page_views: parseInt(pv.rows[0].human),
+        affiliate_clicks: parseInt(clicks.rows[0].c),
+        searches: (await pool.query('SELECT count(*) AS c FROM searches WHERE created_at >= $1', [since])).rows[0].c,
+        est_revenue_usd: Math.round(estRevenue * 100) / 100,
+      },
+      clicks_by_partner: clicksByPartner.rows,
+      top_paths: topPaths.rows,
+      top_city_pages: topCities.rows,
+      top_hotels: topHotels.rows,
+      trending_searches: topSearches.rows,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Hotel Detail Endpoint (DB-first)
 app.get('/api/hotels/:id', async (req, res) => {
   try {
