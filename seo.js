@@ -272,10 +272,12 @@ Sitemap: ${SITE}/sitemap.xml
     try {
       const { slug } = req.params;
       const { rows } = await pool.query(`
-        SELECT h.*, c.name AS city_name, c.slug AS city_slug, c.country_code, cc.name AS country_name, cc.slug AS country_slug
+        SELECT h.*, c.name AS city_name, c.slug AS city_slug, c.country_code, cc.name AS country_name, cc.slug AS country_slug,
+               vho.owner_email, vho.owner_name, vho.purchase_price, vho.custom_headline, vho.custom_review, vho.custom_affiliate_url, vho.is_for_sale, vho.sale_price
         FROM hotels h
         LEFT JOIN cities c ON c.id = h.city_id
         LEFT JOIN countries cc ON cc.code = c.country_code
+        LEFT JOIN virtual_hotel_ownership vho ON vho.hotel_slug = h.slug
         WHERE h.slug = $1`, [slug]);
       if (!rows.length) return res.status(404).send(shell({ title: 'Hotel tidak ditemukan - MyTriv Hotels', desc: 'Hotel tidak ditemukan', canonical: SITE + req.path, ogImage: hotelImage({}, 800), body: '<div class="wrap"><h1>Hotel tidak ditemukan</h1></div>' }));
       const h = rows[0];
@@ -372,7 +374,33 @@ Sitemap: ${SITE}/sitemap.xml
         ` : ''}
       </div>
 
-      <!-- MODAL BANTUAN BUY & EDIT OWNER -->
+      
+      
+
+      <!-- LIVE CLIENT-SIDE REFRESH FOR OWNERSHIP WIDGET -->
+      <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          fetch('/api/hotels/ownership/${slug}')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data && data.owned && data.ownership) {
+                var o = data.ownership;
+                var sec = document.getElementById('virtual-owner-section');
+                if (sec && o.owner_name) {
+                  var initial = o.owner_name.charAt(0).toUpperCase();
+                  var headlineHtml = o.custom_headline ? '<div style="margin-top:16px; padding:12px 16px; background:rgba(0,240,255,0.08); border-left:4px solid #00F0FF; border-radius:6px; color:#E2E8F0; font-size:14px; font-weight:600;">📢 <span style="color:#00F0FF;">Pesan Pemilik:</span> "' + o.custom_headline + '"</div>' : '';
+                  var reviewHtml = o.custom_review ? '<div style="margin-top:10px; color:#CBD5E1; font-size:13px; line-height:1.6; font-style:italic;">✍️ "' + o.custom_review + '"</div>' : '';
+                  var affHtml = o.custom_affiliate_url ? '<div style="margin-top:14px;"><a href="' + o.custom_affiliate_url + '" target="_blank" rel="nofollow noopener" class="cta" style="background:linear-gradient(135deg, #EC4899, #8B5CF6); color:#FFF; font-weight:bold; width:100%; text-align:center; padding:12px; display:block; border-radius:8px; text-decoration:none;">🌟 PROMO KHUSUS PEMILIK: Klik Booking Via Referral Owner</a></div>' : '';
+
+                  sec.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;"><div style="display:flex; align-items:center; gap:14px;"><div style="width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg, #00F0FF, #3B82F6); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:bold; color:#000; box-shadow:0 0 10px #00F0FF;">' + initial + '</div><div><div style="color:#00F0FF; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">👑 VIRTUAL HOTEL OWNER</div><div style="color:#FFF; font-size:20px; font-weight:bold;">' + o.owner_name + '</div><div style="color:#94A3B8; font-size:13px; margin-top:2px;">Pemilik Sah Virtual | Harga Beli: ' + (o.purchase_price || 10000).toLocaleString() + ' TrivCoin</div></div></div><div><button onclick="openOwnerEditModal()" class="cta cta-primary" style="padding:10px 18px; font-size:13px; cursor:pointer;">✏️ Edit Halaman Owner</button></div></div>' + headlineHtml + reviewHtml + affHtml;
+                }
+              }
+            })
+            .catch(function(e) { console.error('Live ownership sync error:', e); });
+        });
+      </script>
+
+<!-- MODAL BANTUAN BUY & EDIT OWNER -->
       <script>
         function openBuyHotelModal() {
           const savedEmail = localStorage.getItem('mytriv_sso_email') || 'mytriv.com@gmail.com';
