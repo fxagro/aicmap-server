@@ -1151,3 +1151,9 @@ const PORT = process.env.PORT || 3099;
 app.listen(PORT, () => {
   console.log(`Edu MyTriv Monopoly & Hotel Aggregator Backend API running on port ${PORT}`);
 });
+
+// SEO pages (server-side rendered) — mounted after API routes
+const createSeoRouter = require('./seo');
+app.use(createSeoRouter({ pool, generatePartnerLink: generateTravelpayoutsPartnerLink }));
+
+module.exports = { pool }; // used by seo router tests
