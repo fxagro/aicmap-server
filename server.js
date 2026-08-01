@@ -844,13 +844,27 @@ const WORLDWIDE_HOTELS = [
 // Hotel Search & Map Filter Endpoint (DB-first, fallback ke WORLDWIDE_HOTELS)
 app.get('/api/hotels/search', async (req, res) => {
   try {
-    const { city, min_price, max_price, stars, amenity, limit = 50 } = req.query;
+    const { city, country, min_price, max_price, stars, amenity, limit = 100, lat, lng, radius } = req.query;
     const conditions = [];
     const params = [];
 
-    if (city) {
+    if (country) {
+      params.push(`%${country.toLowerCase()}%`);
+      conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length})`);
+      params.push(`%${country.toLowerCase()}%`);
+      conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length})`);
+    } else if (city) {
       params.push(`%${city.toLowerCase()}%`);
       conditions.push(`(LOWER(h.city) LIKE $${params.length} OR LOWER(h.country) LIKE $${params.length} OR LOWER(h.name) LIKE $${params.length})`);
+    }
+    if (lat && lng && radius) {
+      const rLat = parseInt(radius) / 111320;
+      const rLng = parseInt(radius) / (111320 * Math.max(0.1, Math.abs(Math.cos(parseFloat(lat) * Math.PI / 180))));
+      params.push(parseFloat(lat) - rLat);
+      params.push(parseFloat(lat) + rLat);
+      params.push(parseFloat(lng) - rLng);
+      params.push(parseFloat(lng) + rLng);
+      conditions.push(`h.lat BETWEEN $${params.length - 3} AND $${params.length - 2} AND h.lng BETWEEN $${params.length - 1} AND $${params.length}`);
     }
     if (min_price) {
       params.push(parseInt(min_price));
@@ -868,12 +882,13 @@ app.get('/api/hotels/search', async (req, res) => {
       params.push(`%${amenity.toLowerCase()}%`);
       conditions.push(`h.amenities::text ILIKE $${params.length}`);
     }
-    params.push(parseInt(limit) || 50);
+    params.push(parseInt(limit) || 100);
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT id, name, city, country, lat, lng, stars, rating, reviews, price_idr, price_formatted, currency, image, amenities, description, slug
-       FROM hotels h ${where} ORDER BY h.rating DESC LIMIT $${params.length}`,
+      `SELECT h.id, h.name, h.city, h.country, h.lat, h.lng, h.stars, h.rating, h.reviews, h.price_idr, h.price_formatted, h.currency, h.image, h.amenities, h.description, h.slug
+       FROM hotels h LEFT JOIN cities c ON c.id = h.city_id LEFT JOIN countries cc ON cc.code = c.country_code
+       ${where} ORDER BY h.rating DESC NULLS LAST, h.stars DESC NULLS LAST LIMIT $${params.length}`,
       params
     );
 
