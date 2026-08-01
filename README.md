@@ -1,122 +1,66 @@
-# MyTriv Hotels — Backend API (aicmap-server)
+# ⚙️ MyTriv Virtual Hotel Monopoly Backend API & SSR Server
 
-Backend API untuk **MyTriv Global Hotel Map** (`mytriv.com/hotels`).
-Menyediakan endpoint untuk fitur community (members/events/chat/leaderboard),
-game Virtual Monopoly, aggregator hotel, dan integrasi Travelpayouts.
+Selamat datang di repositori **Backend API & SSR Renderer** (`/srv/aicmap-server/`) untuk MyTriv Virtual Hotel Monopoly & Aggregator.
 
-- **Port**: `3099` (diproxikan via nginx `/maps/api/` dan `/hotels/api/`)
-- **Runtime**: Node.js + Express
-- **Database**: PostgreSQL (2 koneksi — `aicmap` & `mytriv` untuk SSO Edu)
+---
 
-## Struktur
+## 🏗️ Arsitektur Centralized Git 4-PC
 
-```
-/srv/aicmap-server/
-├── server.js         # Seluruh endpoint API (single-file)
-├── package.json
-├── db/               # Skema & seed database (hotels, dsb.)
-└── node_modules/
-```
+Backend API ini dikelola dengan **Centralized Bare Git Repository** pada server VPS internal.
 
-## Database
+### 📌 Struktur Git Server:
+- **Central Bare Repo**: `/srv/git/aicmap-server.git`
+- **Live Production Path**: `/srv/aicmap-server` (Running PM2 process `aicmap-api` on Port `3099`)
+- **Production Branch**: `ai-agent/hotels-monopoly`
 
-| Database | Koneksi | Fungsi |
-|---|---|---|
-| `aicmap` | `postgres://aicmap:MyTrivAI2026!@127.0.0.1:5432/aicmap` | Data utama app (default via `DATABASE_URL`) |
-| `mytriv` | `postgres://mytriv:mytriv_password_2026@127.0.0.1:5432/mytriv` | SSO sync user Edu (default via `EDU_DATABASE_URL`) |
+---
 
-### Tabel di DB `aicmap`
+## 🛠️ Alur Kerja Multi-PC (Branching Strategy)
 
-| Tabel | Isi |
-|---|---|
-| `members` | Member global (join jaringan, titik di peta) |
-| `events` | Event / meetup |
-| `chat_messages` | Chat global |
-| `edu_quizzes` | Kuis edukasi (reward TrivCoin) |
-| `monopoly_players` | Pemain monopoly (saldo TrivCoin, tier) |
-| `monopoly_properties` | Properti virtual (landmark/hotel) |
-| `monopoly_listings` | Listing marketplace P2P |
-| `token_transactions` | Riwayat transaksi TrivCoin |
-| `hotels` | Katalog hotel kurasi dunia (121 hotel, 96 kota, 49 negara) — sumber utama `/api/hotels/*` |
+Setiap PC / Developer / AI Agent bekerja pada branch masing-masing:
+- **AI Agent**: `ai-agent/hotels-monopoly`
+- **PC 1 (Developer A)**: `pc-win`
+- **PC 2 (Developer B)**: `pc-mac`
 
-## Menjalankan
-
+### 📥 1. Cara Clone di PC Baru (Hanya 1x):
 ```bash
-cd /srv/aicmap-server
-npm install
-pm2 start server.js --name aicmap-api
-# atau langsung
-node server.js
+git clone ssh://root@194.163.138.207:48622/srv/git/aicmap-server.git
 ```
 
-Akses health check: `curl http://127.0.0.1:3099/health`
+### 🌿 2. Buat Branch Sendiri:
+```bash
+git checkout -b <nama-pc-kamu>
+git push -u origin <nama-pc-kamu>
+```
 
-## Daftar Endpoint
+### 🔄 3. Alur Pengembangan Harian:
+1. **Pull Perubahan Terbaru**:
+   ```bash
+   git pull origin <nama-branch-kamu>
+   ```
+2. **Commit Pekerjaan**:
+   ```bash
+   git add .
+   git commit -m "feat: deskripsi backend API"
+   ```
+3. **Push ke Server**:
+   ```bash
+   git push origin <nama-branch-kamu>
+   ```
 
-### Umum
-| Method | Path | Keterangan |
-|---|---|---|
-| GET | `/health` | Health check |
+### 🚀 4. Cara Deploy ke Live Production Server:
+Di server VPS (`/srv/aicmap-server`):
+```bash
+git pull origin ai-agent/hotels-monopoly && pm2 restart aicmap-api
+```
 
-### Auth / SSO
-| Method | Path | Keterangan |
-|---|---|---|
-| POST | `/api/auth/sso-login` | Login SSO via email Edu MyTriv, sinkron tier & bonus TrivCoin |
+---
 
-### Monopoly
-| Method | Path | Keterangan |
-|---|---|---|
-| GET | `/api/monopoly/properties` | Semua properti + pemilik |
-| GET | `/api/monopoly/player/:id` | State pemain + properti yang dimiliki |
-| GET | `/api/monopoly/leaderboard` | Papan peringkat taipan (balance + jumlah properti) |
-| POST | `/api/monopoly/roll-dice` | Kocok dadu, mendarat di properti, bayar sewa jika ada pemilik |
-| POST | `/api/monopoly/buy-property` | Beli properti yang belum dimiliki |
-| POST | `/api/monopoly/upgrade-property` | Upgrade level properti (biaya 50% harga) |
-| POST | `/api/monopoly/answer-quiz` | Jawab kuis, reward TrivCoin jika benar |
-| POST | `/api/monopoly/credit-subscription` | Simulasi subscribe, bonus TrivCoin sesuai tier |
-| GET | `/api/monopoly/marketplace/listings` | Listing marketplace P2P yang aktif |
-| POST | `/api/monopoly/marketplace/list-property` | Pasang properti di marketplace P2P |
-| POST | `/api/monopoly/marketplace/buy-listing` | Beli properti dari marketplace P2P |
+## 🔑 Panduan Daftarkan SSH Key PC Baru
 
-### Hotel
-| Method | Path | Keterangan |
-|---|---|---|
-| GET | `/api/hotels/search` | Cari hotel dari DB `hotels` (city, harga, bintang, amenity), fallback ke dataset statis jika kosong |
-| GET | `/api/hotels/:id` | Detail hotel (dari DB, fallback ke dataset statis) |
-| POST | `/api/hotels/redeem-trivcoin` | Tukar TrivCoin jadi voucher diskon hotel |
-
-### Travelpayouts
-| Method | Path | Keterangan |
-|---|---|---|
-| POST | `/api/travelpayouts/generate-link` | Generate partner link affiliate |
-| GET | `/api/travelpayouts/hotels/live-city` | Hotel per kota — Hotellook API **dimatikan permanen sejak 20 Okt 2025**, endpoint ini kini memakai DB `hotels` sebagai sumber data + partner link |
-| GET | `/api/travelpayouts/config` | Ambil konfigurasi (marker, enabled) |
-| POST | `/api/travelpayouts/config` | Simpan konfigurasi |
-| GET | `/api/travelpayouts/hotels/search` | Hotel search dengan affiliate URL |
-
-> **Catatan Hotellook**: API `engine.hotellook.com` deprecated & nonaktif sejak 20 Okt 2025
-> (affiliate program Hotellook ditutup total oleh Travelpayouts). Tidak ada API hotel pengganti
-> dari Travelpayouts. Strategi: data hotel kurasi di tabel `hotels` + redirect booking
-> langsung ke Agoda/Booking/Trip/Traveloka via partner link.
-
-### Community
-| Method | Path | Keterangan |
-|---|---|---|
-| GET/POST | `/api/members` | Ambil / daftar member global |
-| GET/POST | `/api/events` | Ambil / buat event |
-| GET/POST | `/api/chat` | Chat global |
-| GET | `/api/leaderboard` | Leaderboard kota & negara |
-| PATCH/DELETE | `/api/members/:id` | Verify / hapus member (admin token) |
-| DELETE | `/api/events/:id` | Hapus event (admin token) |
-
-> Endpoint admin memakai header `x-admin-token`. Nilai default token: `mytriv-admin-2026`
-> (dapat di-override via env `AIMAP_ADMIN_TOKEN`).
-
-## Deployment
-
-- Dikelola dengan **PM2** sebagai proses `aicmap-api`.
-- Nginx mem-proxy `/maps/api/` dan `/hotels/api/` ke `http://127.0.0.1:3099/api/`.
-
-## Versi
-
-Lihat `git log` untuk riwayat. Repo ini dipisah dari frontend (`/srv/mytriv.com/mytriv-landing/hotels/`).
+1. Di PC baru, buat SSH key:
+   ```bash
+   ssh-keygen -t ed25519 -C "pc-nama@mytriv.com"
+   ```
+2. Salin isi file `~/.ssh/id_ed25519.pub`.
+3. Tempelkan isi public key tersebut ke file `/root/.ssh/authorized_keys` di server VPS (`194.163.138.207`).
