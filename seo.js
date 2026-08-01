@@ -102,17 +102,20 @@ function partnerLinks(generatePartnerLink, hotel, citySlug) {
   const name = hotel.name || '';
   const cc = (hotel.country_code || '').toLowerCase();
   const cityS = hotel.city_slug || citySlug || '';
+  const cityName = hotel.city_name || hotel.city || name;
   const sub = `mytriv_${citySlug || 'hotel'}`;
   // Agoda: /search?text= redirects to homepage; city-path keeps the hotel name in the search box.
   const agoda = (cityS && cc)
     ? `https://www.agoda.com/city/${encodeURIComponent(cityS)}-${cc}.html?cid=1893836&tag=${marker}&text=${encodeURIComponent(name)}`
     : `https://www.agoda.com/search?text=${encodeURIComponent(name)}&cid=1893836&tag=${marker}`;
+  // Booking/Trip/Traveloka/Expedia: deep-link ke nama hotel sering gagal resolve (redirect ke homepage);
+  // pakai kota sebagai destinasi supaya selalu mendarat di halaman kota yang relevan.
   return {
     agoda,
-    booking: `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(name)}&aid=${marker}`,
-    trip: `https://www.trip.com/hotels/list?keyword=${encodeURIComponent(name)}&Allianceid=${marker}`,
-    traveloka: `https://www.traveloka.com/en-id/hotel/search?spec=${encodeURIComponent(name)}&marker=${marker}`,
-    expedia: `https://www.expedia.com/Hotel-Search?destination=${encodeURIComponent(name)}`,
+    booking: `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(cityName)}&aid=${marker}`,
+    trip: `https://www.trip.com/hotels/list?keyword=${encodeURIComponent(cityName)}&Allianceid=${marker}`,
+    traveloka: `https://www.traveloka.com/en-id/hotel/search?spec=${encodeURIComponent(cityName)}&marker=${marker}`,
+    expedia: `https://www.expedia.com/Hotel-Search?destination=${encodeURIComponent(cityName)}`,
   };
 }
 
