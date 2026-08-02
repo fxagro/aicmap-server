@@ -914,8 +914,17 @@ app.get('/api/hotels/search', async (req, res) => {
       params.push(`%${country.toLowerCase()}%`);
       conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length})`);
     } else if (city) {
-      params.push(`%${city.toLowerCase()}%`);
-      conditions.push(`(LOWER(h.city) LIKE $${params.length} OR LOWER(h.country) LIKE $${params.length} OR LOWER(h.name) LIKE $${params.length})`);
+      const cityMatch = await pool.query(
+        `SELECT id FROM cities WHERE LOWER(name) = $1 OR LOWER(slug) = $1 LIMIT 1`,
+        [city.toLowerCase()]
+      );
+      if (cityMatch.rows.length) {
+        params.push(cityMatch.rows[0].id);
+        conditions.push(`h.city_id = $${params.length}`);
+      } else {
+        params.push(`%${city.toLowerCase()}%`);
+        conditions.push(`(LOWER(h.city) LIKE $${params.length} OR LOWER(h.country) LIKE $${params.length} OR LOWER(h.name) LIKE $${params.length})`);
+      }
     }
     if (lat && lng && radius) {
       const rLat = parseInt(radius) / 111320;
@@ -954,7 +963,7 @@ app.get('/api/hotels/search', async (req, res) => {
 
     const source = 'db';
     if (rows.length > 0) {
-      return res.json({ total: rows.length, source, hotels: rows.map(r => ({ ...r, image: r.image || hotelImgUrl(r.id + '|' + r.name), amenities: Array.isArray(r.amenities) ? r.amenities : (r.amenities || []) })) });
+      return res.json({ total: rows.length, source, hotels: rows.map(r => enrichBookHotel(r)) });
     }
 
     // Fallback: in-memory catalog lama
@@ -1140,6 +1149,40 @@ function generateTravelpayoutsPartnerLink(targetUrl, campaignId = '4115', subId 
   return `https://tp.media/r?marker=${marker}&p=${campaignId}&sub_id=${encodeURIComponent(subId)}&u=${encodeURIComponent(targetUrl)}`;
 }
 
+// ISO country code -> flag emoji (e.g. "id" -> 🇮🇩)
+function countryFlagEmoji(code) {
+  if (!code || code.length !== 2) return '🌐';
+  const cc = code.toUpperCase();
+  return String.fromCodePoint(0x1F1E6 + cc.charCodeAt(0) - 65, 0x1F1E6 + cc.charCodeAt(1) - 65);
+}
+
+// Build OTA partner links + display fields for a DB hotel row (used by /book/ lite page)
+function enrichBookHotel(r) {
+  const price = r.price_idr || 1500000;
+  const prices = {
+    agoda: price,
+    booking: Math.round(price * 1.04),
+    trip: Math.round(price * 1.02),
+    traveloka: Math.round(price * 0.97)
+  };
+  const bestOta = Object.keys(prices).reduce((a, b) => prices[a] <= prices[b] ? a : b);
+  return {
+    ...r,
+    image: r.image || hotelImgUrl(r.id + '|' + r.name),
+    amenities: Array.isArray(r.amenities) ? r.amenities : (r.amenities || []),
+    flag: countryFlagEmoji(r.country_code || (r.country ? (r.country.slice(0, 2)) : '')),
+    distance: `${r.city}`, 
+    prices: prices,
+    best_ota: bestOta.charAt(0).toUpperCase() + bestOta.slice(1),
+    partner_links: {
+      agoda: generateTravelpayoutsPartnerLink(`https://www.agoda.com/search?text=${encodeURIComponent(r.name)}`, '4115', `book_${r.id}`, r.name),
+      booking: generateTravelpayoutsPartnerLink(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(r.name)}`, '4114', `book_${r.id}`, r.name),
+      trip: generateTravelpayoutsPartnerLink(`https://www.trip.com/hotels/list?keyword=${encodeURIComponent(r.name)}`, '5075', `book_${r.id}`, r.name),
+      traveloka: generateTravelpayoutsPartnerLink(`https://www.traveloka.com/en-id/hotel/search?spec=${encodeURIComponent(r.name)}`, 'traveloka', `book_${r.id}`, r.name)
+    }
+  };
+}
+
 app.post('/api/travelpayouts/generate-link', (req, res) => {
   try {
     const { target_url, campaign_id = '4115', sub_id = 'mytriv_hotels' } = req.body || {};
@@ -1256,6 +1299,95 @@ app.post('/api/travelpayouts/config', (req, res) => {
     if (api_token) TRAVELPAYOUTS_CONFIG.api_token = api_token;
     if (marker_id) TRAVELPAYOUTS_CONFIG.marker_id = marker_id;
     res.json({ status: 'ok', message: 'Konfigurasi Travelpayouts berhasil disimpan!', config: TRAVELPAYOUTS_CONFIG });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ==========================================
+// MYTRIV BOOK LITE — REAL DB INTEGRATION ENDPOINTS
+// ==========================================
+
+// GET All destinations (countries + cities with hotel data) for autocomplete & grid
+app.get('/api/destinations', async (req, res) => {
+  try {
+    const { q } = req.query;
+    const searchCond = q ? ` WHERE LOWER(c.name) LIKE $1 OR LOWER(cc.name) LIKE $1` : '';
+    const searchParams = q ? [`%${q.toLowerCase()}%`] : [];
+
+    const [countries, cities, total] = await Promise.all([
+      pool.query(`SELECT cc.code, cc.slug, cc.name, cc.capital, cc.lat, cc.lng, cc.currency, count(h.id) AS hotel_count
+                  FROM countries cc
+                  LEFT JOIN cities c ON c.country_code = cc.code
+                  LEFT JOIN hotels h ON h.city_id = c.id
+                  GROUP BY cc.code, cc.slug, cc.name, cc.capital, cc.lat, cc.lng, cc.currency
+                  HAVING count(h.id) > 0 ORDER BY hotel_count DESC LIMIT 30`),
+      pool.query(`SELECT c.slug, c.name, cc.slug AS country_slug, cc.name AS country, c.country_code, c.lat, c.lng, c.region, count(h.id) AS hotel_count
+                  FROM cities c JOIN countries cc ON cc.code = c.country_code
+                  LEFT JOIN hotels h ON h.city_id = c.id
+                  ${searchCond}
+                  GROUP BY c.slug, c.name, cc.slug, cc.name, c.country_code, c.lat, c.lng, c.region
+                  HAVING count(h.id) > 0 ORDER BY hotel_count DESC LIMIT 500`, searchParams),
+      pool.query('SELECT count(*) AS c FROM hotels')
+    ]);
+
+    res.json({
+      total_hotels: total.rows[0].c,
+      countries: countries.rows.map(r => ({ ...r, flag: countryFlagEmoji(r.code), lat: parseFloat(r.lat), lng: parseFloat(r.lng) })),
+      cities: cities.rows.map(r => ({ ...r, flag: countryFlagEmoji(r.country_code), lat: parseFloat(r.lat), lng: parseFloat(r.lng) }))
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET Flight search deep-link (MyTriv White Label at us.mytriv.com — Travelpayouts WL)
+// A) results_url = direct-results (flightSearch=CGK1208DPS1) skips the 302 → user sees tickets immediately
+// B) form_url     = iframe-embeddable WL search form
+app.get('/api/flights/search', (req, res) => {
+  try {
+    const { origin, destination, depart_date, return_date, adults = 1, children = 0, infants = 0, trip_class = 0, locale = 'id', marker = TRAVELPAYOUTS_CONFIG.marker_id } = req.query;
+
+    const originIata = origin ? String(origin).toUpperCase().slice(0, 3) : 'CGK';
+    const destIata = destination ? String(destination).toUpperCase().slice(0, 3) : 'DPS';
+    const adultsNum = parseInt(adults) || 1;
+
+    // Build flightSearch token: {origin}{DDMM}{dest}{adults}  e.g. CGK1208DPS1
+    let flightToken = originIata + destIata + String(adultsNum);
+    if (depart_date && /^\d{4}-\d{2}-\d{2}$/.test(String(depart_date))) {
+      flightToken = originIata + String(depart_date).slice(8, 10) + String(depart_date).slice(5, 7) + destIata + String(adultsNum);
+    }
+
+    const baseParams = {
+      origin_iata: originIata,
+      destination_iata: destIata,
+      depart_date: depart_date || '',
+      return_date: return_date || '',
+      adults: String(adultsNum),
+      children: String(children),
+      infants: String(infants),
+      trip_class: String(trip_class),
+      locale: locale,
+      with_request: 'true'
+    };
+
+    // Direct-results URL (skips 302, lands on tickets)
+    const resultsUrl = `https://us.mytriv.com/?flightSearch=${flightToken}&${new URLSearchParams(baseParams).toString()}`;
+    // Iframe-friendly search form URL (pre-filled)
+    const formUrl = `https://us.mytriv.com/?${new URLSearchParams(baseParams).toString()}`;
+
+    res.json({
+      status: 'ok',
+      origin: originIata,
+      destination: destIata,
+      depart_date: depart_date || '',
+      adults: adultsNum,
+      marker_id: marker,
+      engine: 'us.mytriv.com',
+      flight_token: flightToken,
+      target_url: resultsUrl,
+      results_url: resultsUrl,
+      form_url: formUrl,
+      partner_url: resultsUrl
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
