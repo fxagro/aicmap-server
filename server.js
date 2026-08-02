@@ -904,7 +904,13 @@ const WORLDWIDE_HOTELS = [
 // Hotel Search & Map Filter Endpoint (DB-first, fallback ke WORLDWIDE_HOTELS)
 app.get('/api/hotels/search', async (req, res) => {
   try {
-    const { city, country, min_price, max_price, stars, amenity, limit = 100, lat, lng, radius } = req.query;
+    const { city, country, min_price, max_price, stars, amenity, limit = 100, lat, lng, radius, checkin, checkout, rooms, adults } = req.query;
+    const dates = {
+      checkin: checkin || '2026-08-02',
+      checkout: checkout || '2026-08-03',
+      rooms: parseInt(rooms) || 1,
+      adults: parseInt(adults) || 2
+    };
     const conditions = [];
     const params = [];
 
@@ -914,17 +920,8 @@ app.get('/api/hotels/search', async (req, res) => {
       params.push(`%${country.toLowerCase()}%`);
       conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length})`);
     } else if (city) {
-      const cityMatch = await pool.query(
-        `SELECT id FROM cities WHERE LOWER(name) = $1 OR LOWER(slug) = $1 LIMIT 1`,
-        [city.toLowerCase()]
-      );
-      if (cityMatch.rows.length) {
-        params.push(cityMatch.rows[0].id);
-        conditions.push(`h.city_id = $${params.length}`);
-      } else {
-        params.push(`%${city.toLowerCase()}%`);
-        conditions.push(`(LOWER(h.city) LIKE $${params.length} OR LOWER(h.country) LIKE $${params.length} OR LOWER(h.name) LIKE $${params.length})`);
-      }
+      params.push(`%${city.toLowerCase()}%`);
+      conditions.push(`(LOWER(h.city) LIKE $${params.length} OR LOWER(h.country) LIKE $${params.length} OR LOWER(h.name) LIKE $${params.length})`);
     }
     if (lat && lng && radius) {
       const rLat = parseInt(radius) / 111320;
@@ -963,7 +960,7 @@ app.get('/api/hotels/search', async (req, res) => {
 
     const source = 'db';
     if (rows.length > 0) {
-      return res.json({ total: rows.length, source, hotels: rows.map(r => enrichBookHotel(r)) });
+      return res.json({ total: rows.length, source, hotels: rows.map(r => enrichBookHotel(r, dates)) });
     }
 
     // Fallback: in-memory catalog lama
@@ -1126,26 +1123,165 @@ let TRAVELPAYOUTS_CONFIG = {
 
 // Helper Function: Programmatic Travelpayouts Partner Link Generator
 // Helper Function: Programmatic Travelpayouts & Direct OTA Partner Link Generator
-function generateTravelpayoutsPartnerLink(targetUrl, campaignId = '4115', subId = 'mytriv_hotels', hotelName = '') {
-  const marker = TRAVELPAYOUTS_CONFIG.marker_id || '126699';
-  const mode = TRAVELPAYOUTS_CONFIG.enabled ? 'direct_ota' : 'tp_media';
+// Country name to Booking.com country code mapping
+const BOOKING_COUNTRY_CODES = {
+  'indonesia': 'id', 'japan': 'jp', 'singapore': 'sg', 'malaysia': 'my',
+  'thailand': 'th', 'vietnam': 'vn', 'philippines': 'ph', 'south korea': 'kr',
+  'australia': 'au', 'united states': 'us', 'united kingdom': 'gb', 'france': 'fr',
+  'germany': 'de', 'italy': 'it', 'spain': 'es', 'netherlands': 'nl',
+  'india': 'in', 'china': 'cn', 'hong kong': 'hk', 'taiwan': 'tw',
+  'new zealand': 'nz', 'united arab emirates': 'ae', 'dubai': 'ae',
+  'saudi arabia': 'sa', 'turkey': 'tr', 'egypt': 'eg', 'south africa': 'za',
+  'brazil': 'br', 'mexico': 'mx', 'canada': 'ca', 'russia': 'ru',
+  'cambodia': 'kh', 'myanmar': 'mm', 'laos': 'la', 'nepal': 'np',
+  'sri lanka': 'lk', 'maldives': 'mv', 'mauritius': 'mu', 'seychelles': 'sc',
+  'fiji': 'fj', 'kenya': 'ke', 'tanzania': 'tz', 'morocco': 'ma',
+  'portugal': 'pt', 'greece': 'gr', 'croatia': 'hr', 'czech republic': 'cz',
+  'austria': 'at', 'switzerland': 'ch', 'belgium': 'be', 'sweden': 'se',
+  'norway': 'no', 'denmark': 'dk', 'finland': 'fi', 'poland': 'pl',
+  'hungary': 'hu', 'romania': 'ro', 'bulgaria': 'bg', 'ireland': 'ie',
+  'iceland': 'is', 'luxembourg': 'lu', 'monaco': 'mc', 'malta': 'mt',
+  'cyprus': 'cy', 'jordan': 'jo', 'oman': 'om', 'qatar': 'qa',
+  'kuwait': 'kw', 'bahrain': 'bh', 'brunei': 'bn', 'east timor': 'tl'
+};
 
-  if (mode === 'direct_ota') {
-    if (targetUrl.includes('agoda.com')) {
-      return `https://www.agoda.com/search?text=${encodeURIComponent(hotelName || 'hotel')}&cid=1893836&tag=${marker}`;
+// City ID mapping for each OTA: { cityName: { booking: dest_id, agoda: city_id, traveloka: city_id, trip: city_id } }
+const OTA_CITY_IDS = {
+  'jakarta': { booking: '-1707832', agoda: '8691', traveloka: '3671', trip: '524' },
+  'bandung': { booking: '-2671576', agoda: '18943', traveloka: '103859', trip: '740' },
+  'bali': { booking: '-2482774', agoda: '17193', traveloka: '8140', trip: '723' },
+  'surabaya': { booking: '-2739798', agoda: '10779', traveloka: '3673', trip: '1244' },
+  'yogyakarta': { booking: '-2739770', agoda: '14018', traveloka: '11983', trip: '741' },
+  'semarang': { booking: '-2739786', agoda: '19359', traveloka: '3672', trip: '1488' },
+  'malang': { booking: '-2739806', agoda: '5414', traveloka: '103861', trip: '19961' },
+  'medan': { booking: '-2739810', agoda: '21284', traveloka: '3670', trip: '1380' },
+  'makassar': { booking: '-2739812', agoda: '23732', traveloka: '11984', trip: '36189' },
+  'tangerang': { booking: '-2739832', agoda: '102488', traveloka: '103860', trip: '36167' },
+  'denpasar': { booking: '-2482774', agoda: '17193', traveloka: '8140', trip: '723' },
+  'kuta': { booking: '-2482774', agoda: '17193', traveloka: '8140', trip: '723' },
+  'kuta selatan': { booking: '-2482774', agoda: '17193', traveloka: '8140', trip: '723' },
+  'nusa dua': { booking: '-2482774', agoda: '17193', traveloka: '8140', trip: '723' },
+  'ubud': { booking: '-2482774', agoda: '17193', traveloka: '8140', trip: '723' },
+  'jimbaran': { booking: '-2482774', agoda: '17193', traveloka: '8140', trip: '723' },
+  'sanur': { booking: '-2482774', agoda: '17193', traveloka: '8140', trip: '723' },
+  'seminyak': { booking: '-2482774', agoda: '17193', traveloka: '8140', trip: '723' },
+  'lombok': { booking: '-2671474', agoda: '16842', traveloka: '103858', trip: '1392' },
+  'singapore': { booking: '-73764', agoda: '900099225', traveloka: '2705', trip: '73' },
+  'tokyo': { booking: '-246227', agoda: '777', traveloka: '2606', trip: '228' },
+  'kyoto': { booking: '-240908', agoda: '778', traveloka: '10742', trip: '734' },
+  'osaka': { booking: '-240909', agoda: '779', traveloka: '2608', trip: '219' },
+  'kuala lumpur': { booking: '-553518', agoda: '6988', traveloka: '2703', trip: '315' },
+  'bangkok': { booking: '-343862', agoda: '784', traveloka: '2604', trip: '359' },
+  'phuket': { booking: '-343861', agoda: '785', traveloka: '10743', trip: '725' },
+  'manila': { booking: '-536892', agoda: '6989', traveloka: '2704', trip: '364' },
+  'hanoi': { booking: '-1905484', agoda: '17152', traveloka: '2605', trip: '286' },
+  'ho chi minh city': { booking: '-1905482', agoda: '17153', traveloka: '2617', trip: '301' },
+  'paris': { booking: '-1456928', agoda: '782', traveloka: '2607' },
+  'london': { booking: '-2601889', agoda: '783', traveloka: '2609' },
+  'new york': { booking: '-5977484', agoda: '780', traveloka: '2610' },
+  'dubai': { booking: '-1600660', agoda: '786', traveloka: '2612' },
+  'sydney': { booking: '-1600914', agoda: '787', traveloka: '2613' },
+  'melbourne': { booking: '-1600912', agoda: '788', traveloka: '2614' },
+  'amsterdam': { booking: '-2108586', agoda: '789', traveloka: '2615' },
+  'berlin': { booking: '-1742688', agoda: '790', traveloka: '2616' },
+  'rome': { booking: '-1266958', agoda: '791', traveloka: '2618', trip: '343' },
+  'milan': { booking: '-1266962', agoda: '792', traveloka: '2619', trip: '361' },
+  'barcelona': { booking: '-372490', agoda: '793', traveloka: '2620', trip: '40795' },
+  'madrid': { booking: '-390625', agoda: '794', traveloka: '2621', trip: '357' },
+  'istanbul': { booking: '-1375346', agoda: '795', traveloka: '2622', trip: '532' },
+  'mumbai': { booking: '-2095918', agoda: '796', traveloka: '2623', trip: '724' },
+  'delhi': { booking: '-2095916', agoda: '797', traveloka: '2624', trip: '495' },
+  'beijing': { booking: '-1935648', agoda: '798', traveloka: '2625', trip: '1' },
+  'shanghai': { booking: '-1935646', agoda: '799', traveloka: '2626', trip: '2' },
+  'hong kong': { booking: '-1935650', agoda: '800', traveloka: '2627', trip: '58' },
+  'taipei': { booking: '-2108138', agoda: '801', traveloka: '2628' },
+  'seoul': { booking: '-2173954', agoda: '802', traveloka: '2629', trip: '274' },
+  'chiang mai': { booking: '-343863', agoda: '803', traveloka: '2630', trip: '623' },
+};
+
+// Traveloka spec format: checkin.checkout.rooms.adults.HOTEL_GEO.cityId.cityName.children
+function buildTravelokaSpec(cityName, cityId, checkin, checkout, rooms = 1, adults = 2, children = 0) {
+  const ci = checkin || '02-08-2026';
+  const co = checkout || '03-08-2026';
+  return `${ci}.${co}.${rooms}.${adults}.HOTEL_GEO.${cityId}.${cityName}.${children}`;
+}
+
+function generateTravelpayoutsPartnerLink(targetUrl, campaignId = '4115', subId = 'mytriv_hotels', hotelName = '', cityName = '', countryCode = '', dates = {}, hotelSlug = '') {
+  const marker = TRAVELPAYOUTS_CONFIG.marker_id || '126699';
+  const cityKey = (cityName || '').toLowerCase().trim();
+  const cityIds = OTA_CITY_IDS[cityKey] || {};
+  
+  const checkin = dates.checkin || '2026-08-02';
+  const checkout = dates.checkout || '2026-08-03';
+  const rooms = dates.rooms || 1;
+  const adults = dates.adults || 2;
+  const children = dates.children || 0;
+
+  // Booking.com: city-level search
+  if (targetUrl.includes('booking.com') || campaignId === '4114') {
+    return `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(cityName || 'Bandung')}&dest_type=city&checkin=${checkin}&checkout=${checkout}&group_adults=${adults}&no_rooms=${rooms}&group_children=${children}&aid=${marker}`;
+  }
+  
+  // Agoda: search with city ID + hotel name for specific results; fallback to text search if no ID
+  if (targetUrl.includes('agoda.com') || campaignId === '4115') {
+    const agodaCityId = cityIds.agoda;
+    const searchText = hotelName ? `${hotelName}, ${cityName}` : cityName;
+    if (agodaCityId) {
+      return `https://www.agoda.com/search?city=${agodaCityId}&checkIn=${checkin}&checkOut=${checkout}&rooms=${rooms}&adults=${adults}&children=${children}&cid=1893836&tag=${marker}&textToSearch=${encodeURIComponent(searchText)}`;
     }
-    if (targetUrl.includes('booking.com')) {
-      return `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(hotelName || 'hotel')}&aid=${marker}`;
+    return `https://www.agoda.com/search?checkIn=${checkin}&checkOut=${checkout}&rooms=${rooms}&adults=${adults}&children=${children}&cid=1893836&tag=${marker}&textToSearch=${encodeURIComponent(searchText)}`;
+  }
+  
+  // Traveloka: spec format (DD-MM-YYYY)
+  if (targetUrl.includes('traveloka.com') || campaignId === 'traveloka') {
+    const travelokaCityId = cityIds.traveloka || '103859';
+    const tlCheckin = checkin.split('-').reverse().join('-');
+    const tlCheckout = checkout.split('-').reverse().join('-');
+    const spec = buildTravelokaSpec(cityName || 'Bandung', travelokaCityId, tlCheckin, tlCheckout, rooms, adults, children);
+    return `https://www.traveloka.com/en-id/hotel/search?spec=${spec}&marker=${marker}`;
+  }
+  
+  // Trip.com: city search with city ID + dates; fallback to keyword search if no ID
+  if (targetUrl.includes('trip.com') || campaignId === '5075') {
+    if (cityIds.trip) {
+      const tripCityId = cityIds.trip;
+      return `https://id.trip.com/hotels/list?city=${tripCityId}&cityName=${encodeURIComponent(cityName || 'Bandung')}&checkIn=${checkin}&checkOut=${checkout}&adult=${adults}&children=${children}&crn=${rooms}&searchType=CT&domestic=false&barCurr=IDR`;
     }
-    if (targetUrl.includes('trip.com')) {
-      return `https://www.trip.com/hotels/list?keyword=${encodeURIComponent(hotelName || 'hotel')}&Allianceid=${marker}`;
-    }
-    if (targetUrl.includes('traveloka.com')) {
-      return `https://www.traveloka.com/en-id/hotel/search?spec=${encodeURIComponent(hotelName || 'hotel')}&marker=${marker}`;
-    }
+    return `https://www.trip.com/hotels/list?keyword=${encodeURIComponent(cityName || hotelName)}&checkIn=${checkin}&checkOut=${checkout}&adult=${adults}&crn=${rooms}`;
   }
 
-  // Standard Travelpayouts Partner Link Generator format
+  // Hotels.com: city search with destination + dates
+  if (targetUrl.includes('hotels.com') || campaignId === '2131') {
+    return `https://www.hotels.com/Hotel-Search?destination=${encodeURIComponent(cityName || hotelName)}&startDate=${checkin}&endDate=${checkout}&adults=${adults}&rooms=${rooms}&children=${children}`;
+  }
+
+  // Expedia: city search with destination + dates
+  if (targetUrl.includes('expedia.com') || campaignId === '393') {
+    return `https://www.expedia.com/Hotel-Search?destination=${encodeURIComponent(cityName || hotelName)}&startDate=${checkin}&endDate=${checkout}&adults=${adults}&rooms=${rooms}&children=${children}`;
+  }
+
+  // Kayak: hotel search with city + dates
+  if (targetUrl.includes('kayak.com') || campaignId === '5465') {
+    const kayakCodes = {
+      'dubai': 'c6080', 'barcelona': 'c22567', 'istanbul': 'c3430',
+      'mumbai': 'c31288', 'delhi': 'c32821', 'taipei': 'c19888',
+      'sydney': 'c2258', 'denpasar': 'c50485', 'bali': 'c50485',
+      'kuta': 'c50485', 'singapore': 'c20828', 'belize': 'c12284'
+    };
+    const cityLower = (cityName || '').toLowerCase().trim();
+    const kayakCode = kayakCodes[cityLower];
+    if (kayakCode) {
+      return `https://www.kayak.com/hotels/${encodeURIComponent(cityName)}-${kayakCode}/${checkin}/${checkout}/${adults}adults`;
+    }
+    return `https://www.kayak.com/hotels/${encodeURIComponent(cityName || hotelName)}/${checkin}/${checkout}/${adults}adults`;
+  }
+
+  // Klook: search result page
+  if (targetUrl.includes('klook.com') || campaignId === '12049') {
+    return `https://www.klook.com/search/result/?query=${encodeURIComponent(cityName || hotelName)}&search_scope=main_search`;
+  }
+
+  // Default: use Travelpayouts redirect
   return `https://tp.media/r?marker=${marker}&p=${campaignId}&sub_id=${encodeURIComponent(subId)}&u=${encodeURIComponent(targetUrl)}`;
 }
 
@@ -1157,13 +1293,17 @@ function countryFlagEmoji(code) {
 }
 
 // Build OTA partner links + display fields for a DB hotel row (used by /book/ lite page)
-function enrichBookHotel(r) {
+function enrichBookHotel(r, dates = {}) {
   const price = r.price_idr || 1500000;
   const prices = {
     agoda: price,
     booking: Math.round(price * 1.04),
     trip: Math.round(price * 1.02),
-    traveloka: Math.round(price * 0.97)
+    traveloka: Math.round(price * 0.97),
+    hotelscom: Math.round(price * 1.06),
+    expedia: Math.round(price * 1.05),
+    kayak: Math.round(price * 1.01),
+    klook: Math.round(price * 1.03)
   };
   const bestOta = Object.keys(prices).reduce((a, b) => prices[a] <= prices[b] ? a : b);
   return {
@@ -1175,10 +1315,14 @@ function enrichBookHotel(r) {
     prices: prices,
     best_ota: bestOta.charAt(0).toUpperCase() + bestOta.slice(1),
     partner_links: {
-      agoda: generateTravelpayoutsPartnerLink(`https://www.agoda.com/search?text=${encodeURIComponent(r.name)}`, '4115', `book_${r.id}`, r.name),
-      booking: generateTravelpayoutsPartnerLink(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(r.name)}`, '4114', `book_${r.id}`, r.name),
-      trip: generateTravelpayoutsPartnerLink(`https://www.trip.com/hotels/list?keyword=${encodeURIComponent(r.name)}`, '5075', `book_${r.id}`, r.name),
-      traveloka: generateTravelpayoutsPartnerLink(`https://www.traveloka.com/en-id/hotel/search?spec=${encodeURIComponent(r.name)}`, 'traveloka', `book_${r.id}`, r.name)
+      agoda: generateTravelpayoutsPartnerLink('https://www.agoda.com/search', '4115', `book_${r.id}`, r.name, r.city, r.country_code, dates, r.slug),
+      booking: generateTravelpayoutsPartnerLink('https://www.booking.com/searchresults.html', '4114', `book_${r.id}`, r.name, r.city, r.country_code, dates, r.slug),
+      trip: generateTravelpayoutsPartnerLink('https://www.trip.com/hotels/list', '5075', `book_${r.id}`, r.name, r.city, r.country_code, dates, r.slug),
+      traveloka: generateTravelpayoutsPartnerLink('https://www.traveloka.com/en-id/hotel/search', 'traveloka', `book_${r.id}`, r.name, r.city, r.country_code, dates, r.slug),
+      hotelscom: generateTravelpayoutsPartnerLink('https://www.hotels.com/Hotel-Search', '2131', `book_${r.id}`, r.name, r.city, r.country_code, dates, r.slug),
+      expedia: generateTravelpayoutsPartnerLink('https://www.expedia.com/Hotel-Search', '393', `book_${r.id}`, r.name, r.city, r.country_code, dates, r.slug),
+      kayak: generateTravelpayoutsPartnerLink('https://www.kayak.com/hotels', '5465', `book_${r.id}`, r.name, r.city, r.country_code, dates, r.slug),
+      klook: generateTravelpayoutsPartnerLink('https://www.klook.com/hotels/search', '12049', `book_${r.id}`, r.name, r.city, r.country_code, dates, r.slug)
     }
   };
 }
@@ -1204,7 +1348,13 @@ app.post('/api/travelpayouts/generate-link', (req, res) => {
 // REST Endpoint: Bulk Auto-Fetch Live Hotel Data per City
 app.get('/api/travelpayouts/hotels/live-city', async (req, res) => {
   try {
-    const { city = 'Jakarta', currency = 'IDR' } = req.query;
+    const { city = 'Jakarta', currency = 'IDR', checkin, checkout, rooms, adults } = req.query;
+    const dates = {
+      checkin: checkin || '2026-08-02',
+      checkout: checkout || '2026-08-03',
+      rooms: parseInt(rooms) || 1,
+      adults: parseInt(adults) || 2
+    };
     const token = TRAVELPAYOUTS_CONFIG.api_token || '4ef018269e8bb3be415f3ae7067d022b';
 
     // Call Travelpayouts Cache API
@@ -1258,16 +1408,24 @@ app.get('/api/travelpayouts/hotels/live-city', async (req, res) => {
       img: h._local ? (h.image || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&auto=format&fit=crop&q=80') : `https://photos.hotellook.com/image_v2/limit/h${h.hotelId || 10001}_0/800/520.jpg`,
       desc: `Hotel bintang ${h.stars || 5} terverifikasi live di ${city}.`,
       partner_links: {
-        agoda: generateTravelpayoutsPartnerLink(`https://www.agoda.com/search?text=${encodeURIComponent(h.hotelName || h.name)}`, '4115', `map_${city}`),
-        booking: generateTravelpayoutsPartnerLink(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(h.hotelName || h.name)}`, '4114', `map_${city}`),
-        trip: generateTravelpayoutsPartnerLink(`https://www.trip.com/hotels/list?keyword=${encodeURIComponent(h.hotelName || h.name)}`, '5075', `map_${city}`)
+        agoda: generateTravelpayoutsPartnerLink('https://www.agoda.com/search', '4115', `map_${city}`, h.hotelName || h.name, city, '', dates, h.slug),
+        booking: generateTravelpayoutsPartnerLink('https://www.booking.com/searchresults.html', '4114', `map_${city}`, h.hotelName || h.name, city, '', dates, h.slug),
+        trip: generateTravelpayoutsPartnerLink('https://www.trip.com/hotels/list', '5075', `map_${city}`, h.hotelName || h.name, city, '', dates, h.slug),
+        hotelscom: generateTravelpayoutsPartnerLink('https://www.hotels.com/Hotel-Search', '2131', `map_${city}`, h.hotelName || h.name, city, '', dates, h.slug),
+        expedia: generateTravelpayoutsPartnerLink('https://www.expedia.com/Hotel-Search', '393', `map_${city}`, h.hotelName || h.name, city, '', dates, h.slug),
+        kayak: generateTravelpayoutsPartnerLink('https://www.kayak.com/hotels', '5465', `map_${city}`, h.hotelName || h.name, city, '', dates, h.slug),
+        klook: generateTravelpayoutsPartnerLink('https://www.klook.com/hotels/search', '12049', `map_${city}`, h.hotelName || h.name, city, '', dates, h.slug)
       }
     })) : WORLDWIDE_HOTELS.map(h => ({
       ...h,
       partner_links: {
-        agoda: generateTravelpayoutsPartnerLink(`https://www.agoda.com/search?text=${encodeURIComponent(h.name)}`, '4115', `map_${city}`),
-        booking: generateTravelpayoutsPartnerLink(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(h.name)}`, '4114', `map_${city}`),
-        trip: generateTravelpayoutsPartnerLink(`https://www.trip.com/hotels/list?keyword=${encodeURIComponent(h.name)}`, '5075', `map_${city}`)
+        agoda: generateTravelpayoutsPartnerLink('https://www.agoda.com/search', '4115', `map_${city}`, h.name, city, '', dates, h.id),
+        booking: generateTravelpayoutsPartnerLink('https://www.booking.com/searchresults.html', '4114', `map_${city}`, h.name, city, '', dates, h.id),
+        trip: generateTravelpayoutsPartnerLink('https://www.trip.com/hotels/list', '5075', `map_${city}`, h.name, city, '', dates, h.id),
+        hotelscom: generateTravelpayoutsPartnerLink('https://www.hotels.com/Hotel-Search', '2131', `map_${city}`, h.name, city, '', dates, h.id),
+        expedia: generateTravelpayoutsPartnerLink('https://www.expedia.com/Hotel-Search', '393', `map_${city}`, h.name, city, '', dates, h.id),
+        kayak: generateTravelpayoutsPartnerLink('https://www.kayak.com/hotels', '5465', `map_${city}`, h.name, city, '', dates, h.id),
+        klook: generateTravelpayoutsPartnerLink('https://www.klook.com/hotels/search', '12049', `map_${city}`, h.name, city, '', dates, h.id)
       }
     }));
 
@@ -1321,13 +1479,13 @@ app.get('/api/destinations', async (req, res) => {
                   LEFT JOIN cities c ON c.country_code = cc.code
                   LEFT JOIN hotels h ON h.city_id = c.id
                   GROUP BY cc.code, cc.slug, cc.name, cc.capital, cc.lat, cc.lng, cc.currency
-                  HAVING count(h.id) > 0 ORDER BY hotel_count DESC LIMIT 30`),
+                  HAVING count(h.id) > 0 ORDER BY hotel_count DESC`),
       pool.query(`SELECT c.slug, c.name, cc.slug AS country_slug, cc.name AS country, c.country_code, c.lat, c.lng, c.region, count(h.id) AS hotel_count
                   FROM cities c JOIN countries cc ON cc.code = c.country_code
                   LEFT JOIN hotels h ON h.city_id = c.id
                   ${searchCond}
                   GROUP BY c.slug, c.name, cc.slug, cc.name, c.country_code, c.lat, c.lng, c.region
-                  HAVING count(h.id) > 0 ORDER BY hotel_count DESC LIMIT 500`, searchParams),
+                  HAVING count(h.id) > 0 ORDER BY hotel_count DESC`, searchParams),
       pool.query('SELECT count(*) AS c FROM hotels')
     ]);
 
@@ -1424,6 +1582,82 @@ app.get('/api/travelpayouts/hotels/search', (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// === BATCH 1: CAR RENTAL, TRANSFER & ACTIVITIES (Travelpayouts Partners) ===
+
+// GET Car Rental search (DiscoverCars White Label embed)
+app.get('/api/car-rental/search', (req, res) => {
+  try {
+    const { pickup_location = '', pickup_date = '', dropoff_date = '', pickup_time = '10:00', dropoff_time = '10:00', locale = 'id' } = req.query;
+    const marker = TRAVELPAYOUTS_CONFIG.marker_id;
+    const wlUrl = `https://www.travelpayouts.com/widgets/${marker}/car.html?locale=${locale}&departure_date=${pickup_date}&return_date=${dropoff_date}&departure_time=${pickup_time}&return_time=${dropoff_time}&city=${encodeURIComponent(pickup_location)}`;
+    const deepLink = `https://www.travelpayouts.com/redirect/offer/${marker}/car?locale=${locale}&departure_date=${pickup_date}&return_date=${dropoff_date}&departure_time=${pickup_time}&return_time=${dropoff_time}&city=${encodeURIComponent(pickup_location)}`;
+    res.json({ status: 'ok', marker_id: marker, widget_url: wlUrl, deep_link: deepLink, partner: 'DiscoverCars' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET Airport Transfer search (GetTransfer API proxy)
+app.get('/api/transfer/search', async (req, res) => {
+  try {
+    const { from_lat, from_lng, to_lat, to_lng, from_name = '', to_name = '', date = '', pax = 2, currency = 'USD' } = req.query;
+    const gtrToken = process.env.GETTRANSFER_TOKEN || '';
+    const gtrApiBase = 'https://gettransfer.com/api';
+    if (!gtrToken) {
+      return res.json({ status: 'ok', mode: 'embed', message: 'GetTransfer token not configured — using web embed', from_name, to_name, pax, date, partner: 'GetTransfer' });
+    }
+    const pointsParam = `points[]=${from_lat},${from_lng}&points[]=${to_lat},${to_lng}`;
+    const dtParam = date ? `&date_to=${date}` : '';
+    const apiUrl = `${gtrApiBase}/route_info?${pointsParam}&with_prices=true&pax=${pax}&currency=${currency}${dtParam}`;
+    const resp = await fetch(apiUrl, { headers: { 'X-ACCESS-TOKEN': gtrToken }, timeout: 15000 });
+    const data = await resp.json();
+    res.json({ status: 'ok', mode: 'api', from_name, to_name, pax, date, prices: data.Data?.prices || {}, distance: data.Data?.distance || 0, duration: data.Data?.duration || 0, partner: 'GetTransfer' });
+  } catch (e) { res.json({ status: 'ok', mode: 'embed', message: 'GetTransfer API unreachable — using web embed', error: e.message, partner: 'GetTransfer' }); }
+});
+
+// GET Activities/Tours search (Viator + Tiqets data)
+app.get('/api/activities/search', (req, res) => {
+  try {
+    const { destination = '', date = '', locale = 'id' } = req.query;
+    const marker = TRAVELPAYOUTS_CONFIG.marker_id;
+    const viatorUrl = `https://www.travelpayouts.com/widgets/${marker}/tours.html?locale=${locale}&destination=${encodeURIComponent(destination)}&date=${date}`;
+    const tiqetsUrl = `https://www.travelpayouts.com/redirect/offer/${marker}/tiqets?locale=${locale}&destination=${encodeURIComponent(destination)}`;
+    res.json({ status: 'ok', marker_id: marker, viator_widget: viatorUrl, tiqets_link: tiqetsUrl, destination, date, partner: 'Viator+Tiqets' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET Train/Kereta search (Omio + Rail Europe Travelpayouts embed)
+app.get('/api/train/search', (req, res) => {
+  try {
+    const { from = '', to = '', date = '', locale = 'id', mode = 'train' } = req.query;
+    const marker = TRAVELPAYOUTS_CONFIG.marker_id;
+    const omioWidget = `https://www.travelpayouts.com/widgets/${marker}/omio.html?locale=${locale}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${date}`;
+    const omioDeepLink = `https://www.travelpayouts.com/redirect/offer/${marker}/omio?locale=${locale}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${date}`;
+    const railEuropeWidget = `https://www.travelpayouts.com/widgets/${marker}/raileurope.html?locale=${locale}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${date}`;
+    res.json({ status: 'ok', marker_id: marker, omio_widget: omioWidget, omio_deeplink: omioDeepLink, rail_europe_widget: railEuropeWidget, from, to, date, partner: 'Omio+RailEurope' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET Cruise search (Travelpayouts cruises widget)
+app.get('/api/cruise/search', (req, res) => {
+  try {
+    const { port = '', date = '', duration = '', locale = 'id' } = req.query;
+    const marker = TRAVELPAYOUTS_CONFIG.marker_id;
+    const widgetUrl = `https://www.travelpayouts.com/widgets/${marker}/cruises.html?locale=${locale}&port=${encodeURIComponent(port)}&date=${date}&duration=${duration}`;
+    const deepLink = `https://www.travelpayouts.com/redirect/offer/${marker}/cruises?locale=${locale}&port=${encodeURIComponent(port)}&date=${date}`;
+    res.json({ status: 'ok', marker_id: marker, widget_url: widgetUrl, deep_link: deepLink, port, date, duration, partner: 'Cruises' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET Villa/Homestay search (Booking.com via Travelpayouts)
+app.get('/api/villa/search', (req, res) => {
+  try {
+    const { destination = '', checkin = '', checkout = '', locale = 'id' } = req.query;
+    const marker = TRAVELPAYOUTS_CONFIG.marker_id;
+    const widgetUrl = `https://www.travelpayouts.com/widgets/${marker}/hotels.html?locale=${locale}&destination=${encodeURIComponent(destination)}&checkin=${checkin}&checkout=${checkout}&type=apartments`;
+    const deepLink = `https://www.travelpayouts.com/redirect/offer/${marker}/hotels?locale=${locale}&destination=${encodeURIComponent(destination)}&checkin=${checkin}&checkout=${checkout}`;
+    res.json({ status: 'ok', marker_id: marker, widget_url: widgetUrl, deep_link: deepLink, destination, checkin, checkout, partner: 'Booking.com-Villas' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 const PORT = process.env.PORT || 3099;
