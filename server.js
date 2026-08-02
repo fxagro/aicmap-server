@@ -920,8 +920,17 @@ app.get('/api/hotels/search', async (req, res) => {
       params.push(`%${country.toLowerCase()}%`);
       conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length})`);
     } else if (city) {
-      params.push(`%${city.toLowerCase()}%`);
-      conditions.push(`(LOWER(h.city) LIKE $${params.length} OR LOWER(h.country) LIKE $${params.length} OR LOWER(h.name) LIKE $${params.length})`);
+      const cityRow = await pool.query(
+        `SELECT id FROM cities WHERE LOWER(name) = $1 OR LOWER(slug) = $1 LIMIT 1`,
+        [city.toLowerCase()]
+      );
+      if (cityRow.rows.length) {
+        params.push(cityRow.rows[0].id);
+        conditions.push(`h.city_id = $${params.length}`);
+      } else {
+        params.push(`%${city.toLowerCase()}%`);
+        conditions.push(`(LOWER(h.city) LIKE $${params.length} OR LOWER(h.country) LIKE $${params.length} OR LOWER(h.name) LIKE $${params.length})`);
+      }
     }
     if (lat && lng && radius) {
       const rLat = parseInt(radius) / 111320;
