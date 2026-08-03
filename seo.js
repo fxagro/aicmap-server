@@ -567,11 +567,18 @@ Sitemap: ${SITE}/sitemap.xml
         WHERE c.slug = $1 AND cc.slug = $2`, [city, country]);
       if (!rows.length) return res.status(404).send('Not found');
       const c = rows[0];
-      const totalRes = await pool.query('SELECT count(*)::int AS n FROM hotels WHERE city_id = $1', [c.id]);
+      const isRegion = c.region && c.region === c.name;
+      let totalRes, hotels;
+      if (isRegion) {
+        totalRes = await pool.query('SELECT count(*)::int AS n FROM hotels h JOIN cities cc2 ON cc2.id = h.city_id WHERE cc2.region = $1', [c.region]);
+        hotels = await pool.query(`SELECT h.*, cc2.name AS city_name FROM hotels h JOIN cities cc2 ON cc2.id = h.city_id WHERE cc2.region = $1 ORDER BY h.rating DESC NULLS LAST, h.reviews DESC NULLS LAST LIMIT 300`, [c.region]);
+      } else {
+        totalRes = await pool.query('SELECT count(*)::int AS n FROM hotels WHERE city_id = $1', [c.id]);
+        hotels = await pool.query(`
+          SELECT h.* FROM hotels h JOIN cities c ON c.id = h.city_id
+          WHERE c.id = $1 ORDER BY h.rating DESC NULLS LAST, h.reviews DESC NULLS LAST LIMIT 300`, [c.id]);
+      }
       const totalCount = totalRes.rows[0].n;
-      const hotels = await pool.query(`
-        SELECT h.* FROM hotels h JOIN cities c ON c.id = h.city_id
-        WHERE c.id = $1 ORDER BY h.rating DESC NULLS LAST, h.reviews DESC NULLS LAST LIMIT 300`, [c.id]);
       const budget = hotels.rows.slice().sort((a, b) => a.price_idr - b.price_idr)[0];
       const lux = hotels.rows.slice().sort((a, b) => b.price_idr - a.price_idr)[0];
 

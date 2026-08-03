@@ -923,20 +923,33 @@ app.get('/api/hotels/search', async (req, res) => {
 
     if (country) {
       params.push(`%${country.toLowerCase()}%`);
-      conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length})`);
-      params.push(`%${country.toLowerCase()}%`);
-      conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length})`);
+      conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length} OR LOWER(COALESCE(cc2.name,'')) LIKE $${params.length})`);
     } else if (city) {
       const cityRow = await pool.query(
-        `SELECT id FROM cities WHERE LOWER(name) = $1 OR LOWER(slug) = $1 LIMIT 1`,
+        `SELECT id, name, region FROM cities WHERE LOWER(name) = $1 OR LOWER(slug) = $1 LIMIT 1`,
         [city.toLowerCase()]
       );
       if (cityRow.rows.length) {
-        params.push(cityRow.rows[0].id);
-        conditions.push(`h.city_id = $${params.length}`);
+        const matched = cityRow.rows[0];
+        if (matched.region && String(matched.region).toLowerCase() === city.toLowerCase()) {
+          params.push(city.toLowerCase());
+          conditions.push(`LOWER(c.region) = $${params.length}`);
+        } else {
+          params.push(cityRow.rows[0].id);
+          conditions.push(`h.city_id = $${params.length}`);
+        }
       } else {
-        params.push(`%${city.toLowerCase()}%`);
-        conditions.push(`(LOWER(h.city) LIKE $${params.length} OR LOWER(h.country) LIKE $${params.length} OR LOWER(h.name) LIKE $${params.length})`);
+        const regionRow = await pool.query(
+          `SELECT DISTINCT region FROM cities WHERE LOWER(region) = $1 LIMIT 1`,
+          [city.toLowerCase()]
+        );
+        if (regionRow.rows.length) {
+          params.push(city.toLowerCase());
+          conditions.push(`LOWER(c.region) = $${params.length}`);
+        } else {
+          params.push(`%${city.toLowerCase()}%`);
+          conditions.push(`(LOWER(h.city) LIKE $${params.length} OR LOWER(h.country) LIKE $${params.length} OR LOWER(h.name) LIKE $${params.length})`);
+        }
       }
     }
     if (lat && lng && radius) {
@@ -967,16 +980,30 @@ app.get('/api/hotels/search', async (req, res) => {
     params.push(parseInt(limit) || 100);
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const joinClause = `
+       FROM hotels h
+       LEFT JOIN cities c ON c.id = h.city_id
+       LEFT JOIN countries cc ON cc.code = c.country_code
+       LEFT JOIN cities c2 ON (LOWER(c2.slug) = LOWER(h.city) OR LOWER(c2.name) = LOWER(h.city))
+       LEFT JOIN countries cc2 ON LOWER(cc2.name) = LOWER(h.country)`;
     const { rows } = await pool.query(
-      `SELECT h.id, h.name, h.city, h.country, h.lat, h.lng, h.stars, h.rating, h.reviews, h.price_idr, h.price_formatted, h.currency, h.image, h.amenities, h.description, h.slug, c.slug AS city_slug, c.country_code AS country_code
-       FROM hotels h LEFT JOIN cities c ON c.id = h.city_id LEFT JOIN countries cc ON cc.code = c.country_code
+      `SELECT h.id, h.name, h.city, h.country, h.lat, h.lng, h.stars, h.rating, h.reviews, h.price_idr, h.price_formatted, h.currency, h.image, h.amenities, h.description, h.slug,
+              COALESCE(c.slug, c2.slug) AS city_slug,
+              COALESCE(cc.code, c2.country_code, cc2.code) AS country_code
+       ${joinClause}
        ${where} ORDER BY h.rating DESC NULLS LAST, h.stars DESC NULLS LAST LIMIT $${params.length}`,
       params
     );
 
+    const countRes = await pool.query(
+      `SELECT count(*)::int AS total ${joinClause} ${where}`,
+      params.slice(0, params.length - 1)
+    );
+    const totalCount = countRes.rows[0] ? countRes.rows[0].total : rows.length;
+
     const source = 'db';
     if (rows.length > 0) {
-      return res.json({ total: rows.length, source, hotels: rows.map(r => enrichBookHotel(r, dates)) });
+      return res.json({ total: totalCount, source, hotels: rows.map(r => enrichBookHotel(r, dates)) });
     }
 
     // Fallback: in-memory catalog lama
@@ -1053,10 +1080,21 @@ app.get('/api/seo/hub', async (req, res) => {
                   LEFT JOIN cities c ON c.country_code = cc.code
                   LEFT JOIN hotels h ON h.city_id = c.id
                   GROUP BY cc.slug, cc.name HAVING count(h.id) > 0 ORDER BY hotel_count DESC LIMIT 12`),
-      pool.query(`SELECT c.slug, c.name, cc.slug AS country_slug, count(h.id) AS hotel_count FROM cities c
+      pool.query(`WITH region_totals AS (
+                    SELECT c.region, count(h.id) AS hotel_count FROM cities c JOIN hotels h ON h.city_id = c.id
+                    WHERE c.region IS NOT NULL GROUP BY c.region
+                  ), city_totals AS (
+                    SELECT c.id, count(h.id) AS hotel_count FROM cities c LEFT JOIN hotels h ON h.city_id = c.id GROUP BY c.id
+                  )
+                  SELECT c.slug, c.name, cc.slug AS country_slug,
+                         CASE WHEN c.region IS NOT NULL AND c.region = c.name THEN COALESCE(rt.hotel_count,0) ELSE COALESCE(ct.hotel_count,0) END AS hotel_count
+                  FROM cities c
                   JOIN countries cc ON cc.code = c.country_code
-                  LEFT JOIN hotels h ON h.city_id = c.id
-                  GROUP BY c.slug, c.name, cc.slug HAVING count(h.id) > 0 ORDER BY hotel_count DESC LIMIT 12`),
+                  LEFT JOIN city_totals ct ON ct.id = c.id
+                  LEFT JOIN region_totals rt ON rt.region = c.region
+                  GROUP BY c.slug, c.name, cc.slug, c.region, rt.hotel_count, ct.hotel_count
+                  HAVING CASE WHEN c.region IS NOT NULL AND c.region = c.name THEN COALESCE(rt.hotel_count,0) ELSE COALESCE(ct.hotel_count,0) END > 0
+                  ORDER BY hotel_count DESC LIMIT 12`),
       pool.query(`SELECT h.id, h.name, h.slug, h.stars, h.rating, h.price_idr, h.image, c.name AS city_name, cc.slug AS country_slug
                   FROM hotels h LEFT JOIN cities c ON c.id = h.city_id LEFT JOIN countries cc ON cc.code = c.country_code
                   WHERE h.slug IS NOT NULL ORDER BY h.rating DESC NULLS LAST, h.reviews DESC NULLS LAST LIMIT 12`),
@@ -1075,10 +1113,18 @@ app.get('/api/hotels/:id', async (req, res) => {
 
     if (Number.isInteger(numId) && numId > 0) {
       const { rows } = await pool.query(
-        `SELECT h.id, h.name, h.city, h.country, h.lat, h.lng, h.stars, h.rating, h.reviews, h.price_idr, h.price_formatted, h.currency, h.image, h.amenities, h.description, h.slug, c.slug AS city_slug, c.country_code AS country_code FROM hotels h LEFT JOIN cities c ON c.id = h.city_id WHERE h.id = $1::INTEGER`,
+        `SELECT h.id, h.name, h.city, h.country, h.lat, h.lng, h.stars, h.rating, h.reviews, h.price_idr, h.price_formatted, h.currency, h.image, h.amenities, h.description, h.slug,
+                COALESCE(c.slug, c2.slug) AS city_slug,
+                COALESCE(cc.code, c2.country_code, cc2.code) AS country_code
+         FROM hotels h
+         LEFT JOIN cities c ON c.id = h.city_id
+         LEFT JOIN countries cc ON cc.code = c.country_code
+         LEFT JOIN cities c2 ON (LOWER(c2.slug) = LOWER(h.city) OR LOWER(c2.name) = LOWER(h.city))
+         LEFT JOIN countries cc2 ON LOWER(cc2.name) = LOWER(h.country)
+         WHERE h.id = $1::INTEGER`,
         [numId]
       );
-      if (rows.length > 0) hotel = { ...rows[0], image: rows[0].image || hotelImgUrl(rows[0].id + '|' + rows[0].name), amenities: Array.isArray(rows[0].amenities) ? rows[0].amenities : (rows[0].amenities || []) };
+      if (rows.length > 0) hotel = { ...rows[0], image: rows[0].image || hotelImgUrl(rows[0].id + '|' + rows[0].name), amenities: Array.isArray(rows[0].amenities) ? rows[0].amenities : (rows[0].amenities || []), flag: countryFlagEmoji(rows[0].country_code || countryCodeByName(rows[0].country) || (rows[0].country ? rows[0].country.slice(0, 2) : '')) };
     }
 
     if (!hotel) hotel = WORLDWIDE_HOTELS.find(h => h.id === id);
@@ -1309,6 +1355,28 @@ function countryFlagEmoji(code) {
   return String.fromCodePoint(0x1F1E6 + cc.charCodeAt(0) - 65, 0x1F1E6 + cc.charCodeAt(1) - 65);
 }
 
+// Full country name -> ISO-2 code (fallback so flags never resolve to a wrong country)
+const EXTRA_COUNTRY_CODES = {
+  'myanmar (burma)': 'mm', 'czech republic': 'cz', 'czechia': 'cz', 'south korea': 'kr',
+  'north korea': 'kp', 'united states of america': 'us', 'usa': 'us', 'uk': 'gb',
+  'united kingdom (uk)': 'gb', 'united arab emirates (uae)': 'ae', 'uae': 'ae',
+  'south sudan': 'ss', 'ivory coast': 'ci', 'cote d\x27ivoire': 'ci', 'east timor': 'tl',
+  'timor-leste': 'tl', 'cape verde': 'cv', 'democratic republic of the congo': 'cd',
+  'republic of the congo': 'cg', 'burkina faso': 'bf', 'bosnia and herzegovina': 'ba',
+  'dominican republic': 'do', 'papua new guinea': 'pg', 'sri lanka': 'lk',
+  'new zealand': 'nz', 'saudi arabia': 'sa', 'netherlands': 'nl', 'switzerland': 'ch',
+  'united kingdom': 'gb', 'vietnam': 'vn', 'philippines': 'ph', 'thailand': 'th',
+  'indonesia': 'id', 'malaysia': 'my', 'singapore': 'sg', 'japan': 'jp', 'india': 'in',
+  'china': 'cn', 'hong kong': 'hk', 'taiwan': 'tw', 'macau': 'mo'
+};
+function countryCodeByName(name) {
+  if (!name) return null;
+  const n = String(name).trim().toLowerCase();
+  if (BOOKING_COUNTRY_CODES[n]) return BOOKING_COUNTRY_CODES[n];
+  if (EXTRA_COUNTRY_CODES[n]) return EXTRA_COUNTRY_CODES[n];
+  return null;
+}
+
 // Build OTA partner links + display fields for a DB hotel row (used by /book/ lite page)
 function enrichBookHotel(r, dates = {}) {
   const price = r.price_idr || 1500000;
@@ -1327,7 +1395,7 @@ function enrichBookHotel(r, dates = {}) {
     ...r,
     image: r.image || hotelImgUrl(r.id + '|' + r.name),
     amenities: Array.isArray(r.amenities) ? r.amenities : (r.amenities || []),
-    flag: countryFlagEmoji(r.country_code || (r.country ? (r.country.slice(0, 2)) : '')),
+    flag: countryFlagEmoji(r.country_code || countryCodeByName(r.country) || (r.country ? (r.country.slice(0, 2)) : '')),
     distance: `${r.city}`, 
     prices: prices,
     best_ota: bestOta.charAt(0).toUpperCase() + bestOta.slice(1),
@@ -1497,12 +1565,22 @@ app.get('/api/destinations', async (req, res) => {
                   LEFT JOIN hotels h ON h.city_id = c.id
                   GROUP BY cc.code, cc.slug, cc.name, cc.capital, cc.lat, cc.lng, cc.currency
                   HAVING count(h.id) > 0 ORDER BY hotel_count DESC`),
-      pool.query(`SELECT c.slug, c.name, cc.slug AS country_slug, cc.name AS country, c.country_code, c.lat, c.lng, c.region, count(h.id) AS hotel_count
-                  FROM cities c JOIN countries cc ON cc.code = c.country_code
-                  LEFT JOIN hotels h ON h.city_id = c.id
+      pool.query(`WITH region_totals AS (
+                    SELECT c.region, count(h.id) AS hotel_count FROM cities c JOIN hotels h ON h.city_id = c.id
+                    WHERE c.region IS NOT NULL GROUP BY c.region
+                  ), city_totals AS (
+                    SELECT c.id, count(h.id) AS hotel_count FROM cities c LEFT JOIN hotels h ON h.city_id = c.id GROUP BY c.id
+                  )
+                  SELECT c.slug, c.name, cc.slug AS country_slug, cc.name AS country, c.country_code, c.lat, c.lng, c.region,
+                         CASE WHEN c.region IS NOT NULL AND c.region = c.name THEN COALESCE(rt.hotel_count,0) ELSE COALESCE(ct.hotel_count,0) END AS hotel_count
+                  FROM cities c
+                  JOIN countries cc ON cc.code = c.country_code
+                  LEFT JOIN city_totals ct ON ct.id = c.id
+                  LEFT JOIN region_totals rt ON rt.region = c.region
                   ${searchCond}
-                  GROUP BY c.slug, c.name, cc.slug, cc.name, c.country_code, c.lat, c.lng, c.region
-                  HAVING count(h.id) > 0 ORDER BY hotel_count DESC`, searchParams),
+                  GROUP BY c.slug, c.name, cc.slug, cc.name, c.country_code, c.lat, c.lng, c.region, rt.hotel_count, ct.hotel_count
+                  HAVING CASE WHEN c.region IS NOT NULL AND c.region = c.name THEN COALESCE(rt.hotel_count,0) ELSE COALESCE(ct.hotel_count,0) END > 0
+                  ORDER BY hotel_count DESC`, searchParams),
       pool.query('SELECT count(*) AS c FROM hotels')
     ]);
 
