@@ -149,6 +149,9 @@ function shell({ title, desc, canonical, ogImage, body, schema, lang = 'id' }) {
 <meta property="og:image" content="${ogImage}">
 <meta name="robots" content="index,follow">
 <link rel="icon" href="/hotels/favicon.ico">
+<link rel="alternate" hreflang="id" href="${canonical.replace('/en/','/')}">
+<link rel="alternate" hreflang="en" href="${canonical.includes('/en/') ? canonical : canonical.replace('/hotel/','/en/hotel/')}">
+<link rel="alternate" hreflang="x-default" href="${canonical.replace('/en/','/')}">
 <link rel="preconnect" href="https://images.unsplash.com">
 ${schema ? jsonLd(schema) : ''}
 <style>
