@@ -315,204 +315,244 @@ Sitemap: ${SITE}/sitemap.xml
       };
       if (h.lat && h.lng) schema.geo = { '@type': 'GeoCoordinates', latitude: h.lat, longitude: h.lng };
 
-      const body = `
+      
+      // ---- Content helpers (deterministic per hotel, unique per page) ----
+      function hashHotel(id) { let h = 5381; for (let c of String(id)) h = ((h << 5) + h + c.charCodeAt(0)) >>> 0; return h; }
+      const hv = hashHotel(h.id);
+      const starLevel = h.stars >= 5 ? 'mewah bintang 5' : h.stars >= 4 ? 'premium bintang 4' : h.stars >= 3 ? 'nyaman bintang 3' : 'ekonomis';
+      const priceRange = h.price_idr < 500000 ? 'terjangkau' : h.price_idr < 1500000 ? 'menengah' : h.price_idr < 5000000 ? 'premium' : 'mewah eksklusif';
+
+      const summaryVariants = [
+        `${esc(h.name)} merupakan pilihan akomodasi ${starLevel} di ${esc(loc)} yang menawarkan keseimbangan sempurna antara kenyamanan dan nilai. Dengan rating ${h.rating || 4.0} dari tamu sebelumnya, hotel ini menjadi salah satu destinasi menginap yang banyak direkomendasikan. Berdasarkan data yang tersedia, ${esc(h.name)} menyediakan ${am.slice(0, 3).join(', ')} sebagai fasilitas utama yang dapat dinikmati oleh setiap tamu. Lokasinya yang strategis menjadikan hotel ini mudah dijangkau dari berbagai titik penting di ${esc(h.city_name || h.city)}. Umumnya hotel di kawasan ini menawarkan pengalaman menginap yang otentik dengan sentuhan keramahtamahan lokal. Dengan rentang harga ${priceRange}, ${esc(h.name)} cocok untuk wisatawan yang mencari kualitas tanpa mengorbankan anggaran. Reservasi dapat dilakukan dengan mudah melalui mitra booking terpercaya kami.`,
+        `${esc(h.name)} hadir sebagai solusi akomodasi ${starLevel} yang mengutamakan kenyamanan tamu di ${esc(loc)}. Hotel ini dirancang untuk memberikan pengalaman menginap yang berkesan dengan kombinasi fasilitas modern dan pelayanan ramah. ${am.slice(0, 3).join(', ')} merupakan beberapa keunggulan yang ditawarkan. Berdasarkan informasi yang tersedia, lokasi ${esc(h.name)} sangat strategis untuk menjelajahi ${esc(h.city_name || h.city)} dan sekitarnya. Setiap kamar dilengkapi dengan standar kenyamanan tinggi untuk memastikan istirahat yang berkualitas. Tamu dapat menikmati suasana yang tenang sambil tetap terhubung dengan berbagai destinasi wisata utama. Pilihan ${priceRange} ini ideal untuk perjalanan bisnis maupun liburan keluarga.`,
+        `Terletak di jantung ${esc(loc)}, ${esc(h.name)} adalah akomodasi ${starLevel} yang memadukan kenyamanan modern dengan akses mudah ke berbagai destinasi. Hotel ini memiliki rating ${h.rating || 4.0} dan menawarkan ${am.slice(0, 3).join(', ')} sebagai fasilitas unggulan. Berdasarkan data tamu sebelumnya, ${esc(h.name)} memberikan nilai luar biasa untuk kategori harganya yang ${priceRange}. Lingkungan sekitar hotel yang aman dan nyaman menjadikannya pilihan tepat bagi wisatawan solo, pasangan, maupun keluarga. Staf hotel yang profesional siap membantu kebutuhan akomodasi Anda selama menginap. Reservasi online tersedia 24 jam melalui platform booking terpercaya.`
+      ];
+      const summaryText = summaryVariants[hv % summaryVariants.length];
+
+      const whyChoosePoints = [
+        ['Harga Kompetitif', 'Tarif '+priceRange+' untuk kualitas '+starLevel+' di '+esc(h.city_name || h.city)],
+        ['Rating Terpercaya', 'Skor '+(h.rating || 4.0)+'/5 dari ulasan tamu'],
+        ['Lokasi Strategis', 'Mudah diakses dari pusat '+esc(h.city_name || h.city)],
+        ['Fasilitas Lengkap', am.slice(0, 2).join(' dan ')+' tersedia'],
+        ['Booking Mudah', 'Reservasi instan via Booking.com, Agoda, Traveloka'],
+        ['Harga Transparan', 'Tidak ada biaya tersembunyi, bandingkan 8 OTA'],
+        ['Pelayanan Profesional', 'Staf berpengalaman siap membantu 24/7'],
+        ['Dekat Transportasi', 'Akses mudah ke stasiun, bandara, dan terminal']
+      ];
+
+      // Get similar hotels (same stars, same country)
+      let similarHotels = [];
+      try {
+        const s = await pool.query('SELECT name, slug, stars, rating, price_idr, image FROM hotels h JOIN cities c ON c.id = h.city_id WHERE h.stars = $1 AND c.country_code = $2 AND h.id <> $3 ORDER BY h.rating DESC NULLS LAST LIMIT 4', [h.stars || 4, h.country_code, h.id]);
+        similarHotels = s.rows;
+      } catch (e) { /* ignore */ }
+const body = `
 <div class="crumbs"><a href="/hotels">Beranda</a> › ${h.country_slug ? `<a href="/hotels/${h.country_slug}">${esc(h.country_name)}</a>` : ''} › ${cityPath ? `<a href="${cityPath}">${esc(h.city_name || h.city)}</a>` : ''} › <b>${esc(h.name)}</b></div>
 <div class="wrap">
+
+  <!-- 1. HERO SECTION -->
   <div class="hcard">
-    <img src="${ogImage}" alt="${esc(h.name)}" width="800" height="320">
+    <div class="hero-img-wrap"><img src="${ogImage}" alt="${esc(h.name)}" width="800" height="320"></div>
     <div class="hbody">
       <div class="stars">${'★'.repeat(h.stars || 4)}</div>
-      <h1>${esc(h.name)}</h1>
-      <div class="addr">📍 ${esc(loc)}${h.address ? ' — ' + esc(h.address) : ''}${h.phone ? ' · ☎ ' + esc(h.phone) : ''}</div>
+      <h1>${esc(h.name)} — Hotel ${starLevel} di ${esc(loc)}</h1>
+      <div class="addr">📍 ${esc(loc)}${h.address ? ' — ' + esc(h.address) : ''}</div>
       <div class="tags">${am.map(a => `<span class="tag">${esc(a)}</span>`).join('')}</div>
-      <div class="price">Tarif mulai: <b style="color:#34D399;font-size:18px;">${price}</b> / malam</div>
+      <div class="price">💵 Harga mulai: <b>${price}</b> / malam</div>
       
-      <!-- VIRTUAL HOTEL OWNER & PROMO WIDGET -->
-      <div id="virtual-owner-section" style="margin-top:20px; margin-bottom:20px; padding:20px; background:linear-gradient(135deg, #0d1b2a, #1b263b); border:1.5px solid #00F0FF; border-radius:14px; box-shadow:0 0 25px rgba(0,240,255,0.2);">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-          <div style="display:flex; align-items:center; gap:14px;">
-            <div style="width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg, #00F0FF, #3B82F6); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:bold; color:#000; box-shadow:0 0 10px #00F0FF;">
-              ${h.owner_name ? esc(h.owner_name.charAt(0).toUpperCase()) : '🏰'}
-            </div>
-            <div>
-              <div style="color:#00F0FF; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">
-                ${h.owner_name ? '👑 VIRTUAL HOTEL OWNER' : '🎲 VIRTUAL MONOPOLY HOTEL'}
-              </div>
-              <div style="color:#FFF; font-size:20px; font-weight:bold;">
-                ${h.owner_name ? esc(h.owner_name) : 'Belum Ada Pemilik Virtual'}
-              </div>
-              <div style="color:#94A3B8; font-size:13px; margin-top:2px;">
-                ${h.owner_name ? `Harga Beli: ${fmtPrice(h.purchase_price || 10000)} TrivCoin` : `Harga Hak Milik Virtual: ${(h.stars || 5) * 2000} TrivCoin`}
-              </div>
-            </div>
-          </div>
-
-          <div>
-            ${h.owner_name ? `
-              <button onclick="openOwnerEditModal()" class="cta cta-primary" style="padding:10px 18px; font-size:13px; cursor:pointer;">✏️ Edit Halaman Owner</button>
-            ` : `
-              <button onclick="openBuyHotelModal()" class="cta cta-primary" style="padding:10px 22px; font-size:14px; background:linear-gradient(135deg, #10B981, #059669); cursor:pointer;">🛒 Beli Hotel Virtual Ini</button>
-            `}
-          </div>
-        </div>
-
-        ${h.custom_headline ? `
-          <div style="margin-top:16px; padding:12px 16px; background:rgba(0,240,255,0.08); border-left:4px solid #00F0FF; border-radius:6px; color:#E2E8F0; font-size:14px; font-weight:600;">
-            📢 <span style="color:#00F0FF;">Pesan Pemilik:</span> "${esc(h.custom_headline)}"
-          </div>
-        ` : ''}
-
-        ${h.custom_review ? `
-          <div style="margin-top:10px; color:#CBD5E1; font-size:13px; line-height:1.6; font-style:italic;">
-            ✍️ "${esc(h.custom_review)}"
-          </div>
-        ` : ''}
-
-        ${h.custom_affiliate_url ? `
-          <div style="margin-top:14px;">
-            <a href="${esc(h.custom_affiliate_url)}" target="_blank" rel="nofollow noopener" class="cta" style="background:linear-gradient(135deg, #EC4899, #8B5CF6); color:#FFF; font-weight:bold; width:100%; text-align:center; padding:12px; display:block; border-radius:8px; text-decoration:none;">
-              🌟 PROMO KHUSUS PEMILIK: Klik Booking Via Referral Owner
-            </a>
-          </div>
-        ` : ''}
-      </div>
-
-      
-      
-
-      <!-- LIVE CLIENT-SIDE REFRESH FOR OWNERSHIP WIDGET -->
-      <script>
-        document.addEventListener('DOMContentLoaded', function() {
-          fetch('/api/hotels/ownership/${slug}')
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-              if (data && data.owned && data.ownership) {
-                var o = data.ownership;
-                var sec = document.getElementById('virtual-owner-section');
-                if (sec && o.owner_name) {
-                  var initial = o.owner_name.charAt(0).toUpperCase();
-                  var headlineHtml = o.custom_headline ? '<div style="margin-top:16px; padding:12px 16px; background:rgba(0,240,255,0.08); border-left:4px solid #00F0FF; border-radius:6px; color:#E2E8F0; font-size:14px; font-weight:600;">📢 <span style="color:#00F0FF;">Pesan Pemilik:</span> "' + o.custom_headline + '"</div>' : '';
-                  var reviewHtml = o.custom_review ? '<div style="margin-top:10px; color:#CBD5E1; font-size:13px; line-height:1.6; font-style:italic;">✍️ "' + o.custom_review + '"</div>' : '';
-                  var affHtml = o.custom_affiliate_url ? '<div style="margin-top:14px;"><a href="' + o.custom_affiliate_url + '" target="_blank" rel="nofollow noopener" class="cta" style="background:linear-gradient(135deg, #EC4899, #8B5CF6); color:#FFF; font-weight:bold; width:100%; text-align:center; padding:12px; display:block; border-radius:8px; text-decoration:none;">🌟 PROMO KHUSUS PEMILIK: Klik Booking Via Referral Owner</a></div>' : '';
-
-                  sec.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;"><div style="display:flex; align-items:center; gap:14px;"><div style="width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg, #00F0FF, #3B82F6); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:bold; color:#000; box-shadow:0 0 10px #00F0FF;">' + initial + '</div><div><div style="color:#00F0FF; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">👑 VIRTUAL HOTEL OWNER</div><div style="color:#FFF; font-size:20px; font-weight:bold;">' + o.owner_name + '</div><div style="color:#94A3B8; font-size:13px; margin-top:2px;">Pemilik Sah Virtual | Harga Beli: ' + (o.purchase_price || 10000).toLocaleString() + ' TrivCoin</div></div></div><div><button onclick="openOwnerEditModal()" class="cta cta-primary" style="padding:10px 18px; font-size:13px; cursor:pointer;">✏️ Edit Halaman Owner</button></div></div>' + headlineHtml + reviewHtml + affHtml;
-                }
-              }
-            })
-            .catch(function(e) { console.error('Live ownership sync error:', e); });
-        });
-      </script>
-
-<!-- MODAL BANTUAN BUY & EDIT OWNER -->
-      <script>
-        function openBuyHotelModal() {
-          const savedEmail = localStorage.getItem('mytriv_sso_email') || 'mytriv.com@gmail.com';
-          const email = prompt('Masukkan Email SSO Edu MyTriv Anda untuk membeli hotel virtual ini:', savedEmail);
-          if (!email || !email.trim()) return;
-          const cleanEmail = email.trim();
-          localStorage.setItem('mytriv_sso_email', cleanEmail);
-
-          const payload = {
-            email: cleanEmail,
-            hotel_slug: '${slug}',
-            hotel_name: '${esc(h.name)}',
-            city: '${esc(h.city_name || h.city || '')}',
-            country: '${esc(h.country_name || h.country || '')}',
-            stars: ${h.stars || 5}
-          };
-
-          function sendBuy(endpoint) {
-            return fetch(endpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            }).then(r => r.json());
-          }
-
-          sendBuy('/api/hotels/ownership/buy')
-            .then(res => {
-              if (res.error) {
-                // Fallback to /maps/api/
-                return sendBuy('/maps/api/hotels/ownership/buy');
-              }
-              return res;
-            })
-            .then(res => {
-              if (res.error) {
-                alert('❌ Gagal: ' + res.error);
-              } else {
-                alert('🎉 ' + res.message + '
-
-💰 Sisa Saldo TrivCoin Anda: ' + (res.new_balance !== undefined ? res.new_balance.toLocaleString() : 'Terupdate') + ' TrivCoin');
-                location.reload();
-              }
-            })
-            .catch(e => alert('API Error: ' + e.message));
-        }
-
-        function openOwnerEditModal() {
-          const savedEmail = localStorage.getItem('mytriv_sso_email') || 'mytriv.com@gmail.com';
-          const email = prompt('Masukkan Email Pemilik Hotel:', savedEmail);
-          if (!email || !email.trim()) return;
-          const cleanEmail = email.trim();
-          localStorage.setItem('mytriv_sso_email', cleanEmail);
-
-          const headline = prompt('Pesan Promo / Headline untuk pengunjung:', '${esc(h.custom_headline || '')}');
-          const review = prompt('Ulasan / Rekomendasi Pribadi Anda:', '${esc(h.custom_review || '')}');
-          const affUrl = prompt('URL Link Referral / Affiliate Anda (Opsional):', '${esc(h.custom_affiliate_url || '')}');
-
-          const payload = {
-            email: cleanEmail,
-            hotel_slug: '${slug}',
-            custom_headline: headline,
-            custom_review: review,
-            custom_affiliate_url: affUrl
-          };
-
-          fetch('/api/hotels/ownership/update-page', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          })
-          .then(r => r.json())
-          .then(res => {
-            if (res.error) alert('❌ Error: ' + res.error);
-            else {
-              alert('✨ ' + res.message);
-              location.reload();
-            }
-          })
-          .catch(e => alert('API Error: ' + e.message));
-        }
-      </script>
-
       <div class="ctas">
-        <a class="cta cta-primary" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Booking.com — Pesan Sekarang</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Agoda — Cek Harga</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.trip)}&partner=trip&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Trip.com — Cek Harga</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.traveloka)}&partner=traveloka&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Traveloka — Cek Harga</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.expedia)}&partner=expedia&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">Expedia — Cek Harga</a>
+        <a class="cta cta-primary" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking.com — Pesan Sekarang</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟠 Agoda — Cek Harga</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.trip)}&partner=trip&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟣 Trip.com</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.traveloka)}&partner=traveloka&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟢 Traveloka</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.expedia)}&partner=expedia&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟡 Expedia</a>
       </div>
     </div>
   </div>
 
-  <h2>Hotel di dekat ${esc(h.city_name || h.city)}</h2>
-  <div class="grid">
-    ${nearby.map(n => `<div class="hcard-mini">
-      <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
-      <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
-      <div class="price">${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/hotel/${n.slug}">Lihat & Booking</a></div>
-    </div>`).join('') || '<p style="color:var(--mut)">Tambah data hotel di kota ini segera.</p>'}
-  </div>
+  <!-- 2. RINGKASAN HOTEL -->
+  <section class="seo-section">
+    <h2>📋 Ringkasan ${esc(h.name)}</h2>
+    <div class="seo-content"><p>${summaryText}</p></div>
+  </section>
 
-  <h2>Pertanyaan Umum tentang ${esc(h.name)}</h2>
-  <div class="faq">
-    <details><summary>Berapa harga menginap di ${esc(h.name)}?</summary><p>Harga mulai sekitar ${price} per malam, tergantung tipe kamar dan musim. Gunakan tombol di atas untuk cek harga real-time di Booking.com, Agoda, Trip.com, Traveloka, dan Expedia.</p></details>
-    <details><summary>Di mana lokasi ${esc(h.name)}?</summary><p>Hotel ini berlokasi di ${esc(loc)}${h.lat ? ` (koordinat ${h.lat}, ${h.lng})` : ''}. Anda bisa melihat posisinya di peta interaktif kami.</p></details>
-    <details><summary>Apa fasilitas di ${esc(h.name)}?</summary><p>Fasilitas utama: ${am.join(', ')}.</p></details>
-    <details><summary>Bagaimana cara booking ${esc(h.name)}?</summary><p>Klik tombol Booking.com atau Agoda di halaman ini. Anda diarahkan ke situs partner resmi untuk harga & ketersediaan terbaru tanpa biaya tambahan.</p></details>
-  </div>
-</div>`;
+  <!-- 3. MENGAPA MEMILIH HOTEL INI -->
+  <section class="seo-section">
+    <h2>✅ Mengapa Memilih ${esc(h.name)}?</h2>
+    <div class="seo-grid-2">
+      ${whyChoosePoints.slice(0, 6).map(([title, desc]) => `
+      <div class="seo-point">
+        <strong>✨ ${title}</strong>
+        <span>${desc}</span>
+      </div>`).join('')}
+    </div>
+  </section>
+
+  <!-- 4. FASILITAS -->
+  <section class="seo-section">
+    <h2>🏨 Fasilitas ${esc(h.name)}</h2>
+    <div class="amenities-grid">
+      ${am.map(a => `<div class="amenity-item">✅ ${esc(a)}</div>`).join('')}
+      ${h.wifi ? '<div class="amenity-item">✅ WiFi Gratis</div>' : ''}
+      ${h.parking ? '<div class="amenity-item">✅ Parkir Tersedia</div>' : ''}
+      ${h.pool ? '<div class="amenity-item">✅ Kolam Renang</div>' : ''}
+    </div>
+    <p style="color:var(--mut);font-size:13px;margin-top:10px;">Fasilitas di atas berdasarkan informasi yang tersedia. Beberapa fasilitas mungkin memerlukan biaya tambahan atau reservasi terpisah.</p>
+  </section>
+
+  <!-- 5. COCOK UNTUK -->
+  <section class="seo-section">
+    <h2>👥 Cocok Untuk</h2>
+    <div class="seo-grid-3">
+      <div class="seo-point"><strong>💼 Pelancong Bisnis</strong><span>Akses mudah ke pusat bisnis ${esc(h.city_name || h.city)}</span></div>
+      <div class="seo-point"><strong>👨‍👩‍👧‍👦 Keluarga</strong><span>${h.stars >= 4 ? 'Kamar luas dan fasilitas keluarga' : 'Akomodasi nyaman untuk keluarga'}</span></div>
+      <div class="seo-point"><strong>❤️ Pasangan</strong><span>${h.stars >= 4 ? 'Suasana romantis untuk honeymoon' : 'Suasana cozy untuk liburan berdua'}</span></div>
+      <div class="seo-point"><strong>🎒 Backpacker</strong><span>${h.price_idr < 800000 ? 'Harga terjangkau untuk solo traveler' : 'Pilihan berkualitas dengan harga bersaing'}</span></div>
+      <div class="seo-point"><strong>🎯 Wisatawan</strong><span>Dekat berbagai destinasi wisata di ${esc(h.city_name || h.city)}</span></div>
+      <div class="seo-point"><strong>📅 Rombongan</strong><span>${h.stars >= 4 ? 'Kapasitas besar untuk grup' : 'Cocok untuk rombongan kecil'}</span></div>
+    </div>
+  </section>
+
+  <!-- 6. LOKASI STRATEGIS -->
+  <section class="seo-section">
+    <h2>📍 Lokasi Strategis di ${esc(h.city_name || h.city)}</h2>
+    <p>${esc(h.name)} berlokasi di kawasan ${esc(h.city_name || h.city)}, ${esc(h.country_name || h.country)}${h.lat ? ` (koordinat GPS ${Number(h.lat).toFixed(4)}, ${Number(h.lng).toFixed(4)})` : ''}. Berdasarkan informasi yang tersedia, hotel ini berada di area yang mudah dijangkau dari berbagai titik penting kota. ${h.address ? 'Alamat lengkap: ' + esc(h.address) + '.' : ''} Umumnya hotel di kawasan ${esc(h.city_name || h.city)} menawarkan akses cepat ke pusat perbelanjaan, restoran, dan tempat wisata utama.</p>
+  </section>
+
+  <!-- 7. LANDMARK TERDEKAT -->
+  <section class="seo-section">
+    <h2>🗼 Landmark & Tempat Wisata Terdekat</h2>
+    <p>Berdasarkan lokasi ${esc(h.name)} di ${esc(h.city_name || h.city)}, berikut beberapa landmark dan tempat wisata yang umumnya berada di sekitar kawasan ini:</p>
+    <div class="seo-grid-2">
+      <div class="seo-point"><strong>🏛️ Pusat Kota ${esc(h.city_name || h.city)}</strong><span>Jelajahi jantung kota dan arsitektur lokal</span></div>
+      <div class="seo-point"><strong>🛍️ Pusat Perbelanjaan</strong><span>Destinasi belanja dan kuliner di sekitar hotel</span></div>
+      <div class="seo-point"><strong>🌳 Taman Kota</strong><span>Ruang hijau untuk bersantai dan rekreasi</span></div>
+      <div class="seo-point"><strong>🏛️ Museum & Galeri</strong><span>Wisata budaya dan sejarah ${esc(h.city_name || h.city)}</span></div>
+      <div class="seo-point"><strong>🍽️ Kawasan Kuliner</strong><span>Nikmati kuliner khas ${esc(h.country_name || h.country)}</span></div>
+      <div class="seo-point"><strong>⛪ Tempat Ibadah</strong><span>Rumah ibadah terdekat untuk kenyamanan spiritual</span></div>
+    </div>
+  </section>
+
+  <!-- 8. RESTORAN TERDEKAT -->
+  <section class="seo-section">
+    <h2>🍽️ Pilihan Kuliner di Sekitar ${esc(h.name)}</h2>
+    <p>Kawasan ${esc(h.city_name || h.city)} dikenal dengan keragaman kulinernya. Di sekitar ${esc(h.name)}, umumnya tersedia berbagai pilihan restoran mulai dari masakan lokal ${esc(h.country_name || 'Internasional')} hingga internasional. Beberapa pilihan populer yang bisa Anda temukan:</p>
+    <div class="seo-grid-3">
+      <div class="seo-point"><strong>🍜 Masakan Lokal</strong><span>Cita rasa autentik ${esc(h.country_name || 'lokal')}</span></div>
+      <div class="seo-point"><strong>🍕 Internasional</strong><span>Menu global untuk semua selera</span></div>
+      <div class="seo-point"><strong>☕ Kafe & Coffee Shop</strong><span>Tempat santai bekerja atau bersosialisasi</span></div>
+      <div class="seo-point"><strong>🥘 Fine Dining</strong><span>${h.stars >= 4 ? 'Restoran mewah untuk momen spesial' : 'Pengalaman makan eksklusif'}</span></div>
+      <div class="seo-point"><strong>🍢 Street Food</strong><span>Jajanan kaki lima khas ${esc(h.country_name || 'setempat')}</span></div>
+      <div class="seo-point"><strong>🥐 Sarapan & Brunch</strong><span>Menu pagi segar dekat hotel</span></div>
+    </div>
+  </section>
+
+  <!-- 9. TRANSPORTASI -->
+  <section class="seo-section">
+    <h2>🚗 Akses Transportasi ke ${esc(h.name)}</h2>
+    <p>${esc(h.name)} mudah dijangkau melalui berbagai moda transportasi. Berdasarkan lokasi di ${esc(loc)}, tamu dapat menggunakan:</p>
+    <div class="seo-grid-2">
+      <div class="seo-point"><strong>✈️ Bandara</strong><span>${h.country_code === 'ID' ? 'Bandara terdekat tersedia di kota utama' : 'Bandara internasional di kota besar terdekat'} — lanjutkan dengan taksi atau transportasi umum</span></div>
+      <div class="seo-point"><strong>🚉 Stasiun / Terminal</strong><span>Stasiun dan terminal bus tersedia di ${esc(h.city_name || h.city)} untuk akses darat</span></div>
+      <div class="seo-point"><strong>🚕 Taksi & Ride-Hailing</strong><span>Layanan taksi dan ojek online beroperasi di kawasan ini</span></div>
+      <div class="seo-point"><strong>🚌 Transportasi Umum</strong><span>Bus dan angkutan kota tersedia untuk mobilitas hemat</span></div>
+    </div>
+  </section>
+
+  <!-- 10. HOTEL SERUPA -->
+  <section class="seo-section">
+    <h2>🏨 Hotel Serupa dengan ${esc(h.name)}</h2>
+    <div class="grid">
+      ${similarHotels.length ? similarHotels.map(n => `<div class="hcard-mini">
+        <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
+        <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
+        <div class="price">${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/hotel/${n.slug}">Lihat & Booking</a></div>
+      </div>`).join('') : '<p style="color:var(--mut)">Data hotel serupa akan segera tersedia.</p>'}
+    </div>
+  </section>
+
+  <!-- 11. HOTEL LAIN DI KOTA INI -->
+  <section class="seo-section">
+    <h2>📍 Hotel Lain di ${esc(h.city_name || h.city)}</h2>
+    <div class="grid">
+      ${nearby.filter(n => n.slug !== h.slug).slice(0, 4).map(n => `<div class="hcard-mini">
+        <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
+        <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
+        <div class="price">${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/hotel/${n.slug}">Lihat & Booking</a></div>
+      </div>`).join('') || '<p style="color:var(--mut)">Tambah data hotel di kota ini segera.</p>'}
+    </div>
+  </section>
+
+  <!-- 12. FAQ -->
+  <section class="seo-section">
+    <h2>❓ Pertanyaan Umum tentang ${esc(h.name)}</h2>
+    <div class="faq">
+      <details><summary>Berapa harga menginap di ${esc(h.name)}?</summary><p>Harga mulai sekitar ${price} per malam, tergantung tipe kamar dan musim. Gunakan tombol Booking.com atau Agoda di atas untuk cek harga real-time terkini.</p></details>
+      <details><summary>Di mana lokasi ${esc(h.name)}?</summary><p>Hotel ini berlokasi di ${esc(loc)}${h.lat ? ` (koordinat ${Number(h.lat).toFixed(4)}, ${Number(h.lng).toFixed(4)})` : ''}. Lihat peta interaktif di halaman utama kami.</p></details>
+      <details><summary>Apa fasilitas di ${esc(h.name)}?</summary><p>Fasilitas utama: ${am.join(', ')}${h.wifi ? ', WiFi' : ''}${h.pool ? ', Kolam Renang' : ''}${h.parking ? ', Parkir' : ''}.</p></details>
+      <details><summary>Bagaimana cara booking ${esc(h.name)}?</summary><p>Klik tombol Booking.com, Agoda, atau OTA lainnya di halaman ini. Anda akan diarahkan ke situs partner resmi tanpa biaya tambahan.</p></details>
+      <details><summary>Apakah ${esc(h.name)} cocok untuk keluarga?</summary><p>${h.stars >= 4 ? 'Ya, hotel ini menyediakan kamar luas dan fasilitas ramah keluarga. Cocok untuk liburan bersama anak-anak.' : 'Berdasarkan informasi yang tersedia, hotel ini menyediakan akomodasi yang dapat digunakan oleh keluarga. Hubungi hotel untuk konfirmasi fasilitas keluarga.'}</p></details>
+      <details><summary>Apakah ada parkir di ${esc(h.name)}?</summary><p>${h.parking ? 'Ya, tersedia fasilitas parkir untuk tamu hotel.' : 'Berdasarkan informasi yang tersedia, sebaiknya konfirmasi ketersediaan parkir langsung ke hotel saat reservasi.'}</p></details>
+      <details><summary>Berapa rating tamu ${esc(h.name)}?</summary><p>Hotel ini memiliki rating ${h.rating || 4.0}/5 berdasarkan data yang tersedia. Rating dapat berubah sewaktu-waktu berdasarkan ulasan tamu terbaru.</p></details>
+      <details><summary>Apa pilihan transportasi ke ${esc(h.name)}?</summary><p>Anda dapat menggunakan taksi, ojek online, atau transportasi umum. ${h.country_code === 'ID' ? 'Layanan Gojek dan Grab tersedia di sebagian besar kota Indonesia.' : 'Transportasi umum dan taksi tersedia di kawasan ini.'}</p></details>
+    </div>
+  </section>
+
+  <!-- 13. AI TRAVEL TIPS -->
+  <section class="seo-section">
+    <h2>🤖 AI Travel Tips — Liburan di ${esc(h.city_name || h.city)}</h2>
+    <div class="seo-content">
+      <p>🗓️ <strong>Waktu Terbaik Berkunjung:</strong> ${h.country_code === 'ID' ? 'Musim kemarau (April-Oktober) adalah waktu ideal untuk menjelajahi Indonesia. Hindari musim hujan (November-Maret) untuk pengalaman outdoor yang maksimal.' : 'Periksa musim wisata di ' + esc(h.country_name || h.country) + ' untuk mendapatkan harga terbaik dan cuaca yang nyaman.'}</p>
+      <p>💰 <strong>Tips Hemat:</strong> Booking jauh-jauh hari untuk harga lebih murah. Bandingkan 8 OTA di MyTriv untuk penawaran terbaik. Pertimbangkan menginap di hari kerja (weekday) yang umumnya lebih murah.</p>
+      <p>🎒 <strong>Yang Perlu Dibawa:</strong> ${h.stars >= 4 ? 'Pakaian formal untuk dinner, pakaian kasual untuk eksplorasi, dan kamera untuk mengabadikan momen.' : 'Pakaian nyaman, sandal, sunscreen, dan power bank untuk eksplorasi seharian.'}</p>
+      <p>📱 <strong>Apps Berguna:</strong> Google Maps untuk navigasi, Google Translate untuk bahasa lokal, dan aplikasi ride-hailing untuk transportasi mudah.</p>
+    </div>
+  </section>
+
+  <!-- 14. VIRTUAL MONOPOLY SECTION -->
+  <section class="seo-section">
+    <h2>🎲 Virtual Hotel Monopoly — ${esc(h.name)}</h2>
+    ${h.owner_name ? `
+    <div class="seo-content">
+      <p><strong>👑 Pemilik Virtual:</strong> ${esc(h.owner_name)}</p>
+      <p><strong>💰 Harga Pembelian:</strong> ${fmtPrice(h.purchase_price || 10000)} TrivCoin</p>
+      <p><strong>🏪 Marketplace Status:</strong> ${h.is_for_sale ? '🟢 Dijual (' + fmtPrice(h.sale_price || 0) + ' TrivCoin)' : '🔴 Tidak Dijual'}</p>
+      <p>Hotel ini dimiliki secara virtual dalam game <a href="/hotels/">MyTriv Virtual Hotel Monopoly</a>. Pemilik dapat mengedit halaman, menambahkan promo, dan mendapatkan poin reward.</p>
+    </div>
+    ` : `
+    <div class="seo-content">
+      <p>🏰 <strong>Status:</strong> Belum ada pemilik virtual. Jadilah pemilik pertama!</p>
+      <p>🪙 <strong>Harga Virtual:</strong> ${fmtPrice((h.stars || 5) * 2000)} TrivCoin</p>
+      <p>🎮 Beli hotel ini di <a href="/hotels/">MyTriv Virtual Hotel Monopoly</a> — game dadu keliling 190+ negara dengan integrasi Wikipedia & kuis trivia.</p>
+      <button onclick="openBuyHotelModal()" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-weight:700;cursor:pointer;margin-top:8px;">🛒 Beli Hotel Virtual Ini</button>
+    </div>
+    `}
+  </section>
+
+  <!-- 15. CALL TO ACTION -->
+  <section class="seo-section" style="background:linear-gradient(135deg, rgba(37,99,235,0.15), rgba(245,158,11,0.15));border:2px solid #F59E0B;border-radius:16px;padding:28px;text-align:center;">
+    <h2 style="color:#F59E0B;margin-top:0;">🛎️ Siap Booking ${esc(h.name)}?</h2>
+    <p style="font-size:16px;margin-bottom:20px;">Bandingkan harga terbaik dari 8 OTA dan dapatkan penawaran eksklusif. Tidak ada biaya tambahan — 100% gratis!</p>
+    <div class="ctas">
+      <a class="cta cta-primary" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking.com — Pesan Sekarang</a>
+      <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟠 Agoda — Cek Harga</a>
+      <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.expedia)}&partner=expedia&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟡 Expedia</a>
+    </div>
+  </section>
+
+  <!-- 16. INTERNAL LINKS -->
+  <section class="seo-section">
+    <h2>🔗 Jelajahi Lebih Lanjut</h2>
+    <div class="seo-links">
+      ${h.country_slug ? `<a href="/hotels/${h.country_slug}" class="seo-link">🏨 Hotel di ${esc(h.country_name)}</a>` : ''}
+      ${cityPath ? `<a href="${cityPath}" class="seo-link">📍 Hotel di ${esc(h.city_name || h.city)}</a>` : ''}
+      <a href="/hotels/" class="seo-link">🌍 Semua Hotel — 190+ Negara</a>
+      <a href="/book/" class="seo-link">📖 MyTriv Book — Booking Cepat</a>
+      <a href="/hotels/about.html" class="seo-link">🎲 Panduan Monopoly</a>
+    </div>
+  </section>
+
+</div>`
       res.set('Cache-Control', 'public, max-age=3600');
       res.send(shell({ title, desc, canonical: `${SITE}/hotel/${slug}`, ogImage, body, schema }));
     } catch (e) { console.error('hotel page error:', e.message); res.status(500).send('error'); }
