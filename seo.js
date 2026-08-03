@@ -654,6 +654,91 @@ const body = `
     } catch (e) { console.error('hotel page error:', e.message); res.status(500).send('error'); }
   });
 
+// ---- English hotel detail page ----
+  router.get('/en/hotel/:slug', async (req, res) => {
+    try {
+      const { slug } = req.params;
+      const { rows } = await pool.query(`
+        SELECT h.*, c.name AS city_name, c.slug AS city_slug, c.country_code, cc.name AS country_name, cc.slug AS country_slug,
+               vho.owner_email, vho.owner_name, vho.purchase_price, vho.custom_headline, vho.custom_review, vho.custom_affiliate_url, vho.is_for_sale, vho.sale_price
+        FROM hotels h
+        LEFT JOIN cities c ON c.id = h.city_id
+        LEFT JOIN countries cc ON cc.code = c.country_code
+        LEFT JOIN virtual_hotel_ownership vho ON vho.hotel_slug = h.slug
+        WHERE h.slug = $1`, [slug]);
+      if (!rows.length) return res.status(404).send(shell({ title: 'Hotel not found - MyTriv Hotels', desc: 'Hotel not found', canonical: SITE + req.path, ogImage: hotelImage({}, 800), body: '<div class="wrap"><h1>Hotel not found</h1></div>', lang: 'en' }));
+      const h = rows[0];
+      track(req, 'page_views', { lang: 'en' });
+      const am = amenities(h);
+      const price = fmtPrice(h.price_idr);
+      const links = partnerLinks(generatePartnerLink, h, h.city_name);
+      const loc = h.city_name || h.city || h.country_name || '';
+      const cityPath = h.country_slug ? '/en/hotels/' + h.country_slug + '/' + (h.city_slug || slugify(h.city_name || h.city)) : null;
+      const citySlug = h.city_slug || slugify(h.city_name || h.city);
+
+      let nearby = [];
+      if (h.city_id) {
+        const n = await pool.query('SELECT name, slug, stars, rating, price_idr, image FROM hotels WHERE city_id = $1 AND slug <> $2 ORDER BY rating DESC NULLS LAST LIMIT 6', [h.city_id, slug]);
+        nearby = n.rows;
+      }
+
+      function hashHotel(id) { let hh = 5381; for (let cc of String(id)) hh = ((hh << 5) + hh + cc.charCodeAt(0)) >>> 0; return hh; }
+      const hv = hashHotel(h.id);
+      const starLevel = h.stars >= 5 ? 'luxury 5-star' : h.stars >= 4 ? 'premium 4-star' : h.stars >= 3 ? 'comfortable 3-star' : 'budget-friendly';
+      const priceRange = h.price_idr < 500000 ? 'affordable' : h.price_idr < 1500000 ? 'mid-range' : h.price_idr < 5000000 ? 'premium' : 'luxury';
+
+      const summaryVars = [
+        `${esc(h.name)} is a ${starLevel} accommodation in ${esc(loc)} offering an excellent balance of comfort and value. With a rating of ${h.rating || 4.0}, this hotel is highly recommended by previous guests. Located in a strategic area, it provides easy access to key destinations in ${esc(h.city_name || h.city)}.`,
+        `${esc(h.name)} delivers a memorable ${starLevel} stay experience with modern facilities and friendly service in ${esc(loc)}. Designed for both business and leisure travelers, this hotel combines comfort with convenience at ${priceRange} price point.`
+      ];
+      const summaryText = summaryVars[hv % summaryVars.length];
+      const whyPoints = [
+        ['Competitive Price', priceRange + ' rate for ' + starLevel + ' quality'],
+        ['Trusted Rating', (h.rating || 4.0) + '/5 from guest reviews'],
+        ['Strategic Location', 'Easy access to ' + esc(h.city_name || h.city) + ' center'],
+        ['Complete Facilities', am.slice(0, 2).join(' and ') + ' available'],
+        ['Easy Booking', 'Instant reservation via 8 OTA partners'],
+        ['Transparent Pricing', 'No hidden fees, compare 8 OTAs at once']
+      ];
+
+      let similarHotels = [];
+      try {
+        const s = await pool.query('SELECT name, slug, stars, rating, price_idr, image FROM hotels h JOIN cities c ON c.id = h.city_id WHERE h.stars = $1 AND c.country_code = $2 AND h.id <> $3 ORDER BY h.rating DESC NULLS LAST LIMIT 4', [h.stars || 4, h.country_code, h.id]);
+        similarHotels = s.rows;
+      } catch(e) {}
+
+      const title = h.name + ' — Best Price & Booking ' + loc + ' | MyTriv Hotels';
+      const desc = 'Check best prices for ' + h.name + ' in ' + loc + '. ' + am.slice(0, 3).join(', ') + '. Compare Booking.com, Agoda, Trip.com, Traveloka & more. Free booking, no extra fees.';
+      const ogImage = hotelImage(h, 800);
+      const schema = {
+        '@context': 'https://schema.org', '@type': 'Hotel', name: h.name, image: ogImage,
+        address: { '@type': 'PostalAddress', addressLocality: h.city_name || h.city, addressCountry: h.country_name || h.country },
+        starRating: { '@type': 'Rating', ratingValue: h.stars || 4 },
+        priceRange: price, url: SITE + '/en/hotel/' + slug
+      };
+      if (h.lat && h.lng) schema.geo = { '@type': 'GeoCoordinates', latitude: h.lat, longitude: h.lng };
+
+      // English body template (compact version)
+      const body = '<nav class="crumbs"><ol><li><a href="/hotels">Home</a></li>' + (h.country_slug ? '<li><a href="/en/hotels/' + h.country_slug + '">' + esc(h.country_name) + '</a></li>' : '') + (cityPath ? '<li><a href="' + cityPath + '">' + esc(h.city_name || h.city) + '</a></li>' : '') + '<li><span>' + esc(h.name) + '</span></li></ol></nav>' +
+      '<div class="wrap"><div class="hcard"><img src="' + ogImage + '" alt="' + esc(h.name) + '" width="800" height="320"><div class="hbody"><div class="stars">' + '★'.repeat(h.stars || 4) + ' <span>' + starLevel + '</span></div><h1>' + esc(h.name) + '</h1><p class="addr">📍 ' + esc(loc) + '</p><div class="tags">' + am.map(function(a){ return '<span>' + esc(a) + '</span>'; }).join('') + '</div><div class="price-big">💵 From <strong>' + price + '</strong> / night</div>' +
+      '<div class="ctas"><a class="cta cta-primary" href="/go?u=' + encodeURIComponent(links.booking) + '&partner=booking&slug=' + encodeURIComponent(slug) + '&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking.com</a><a class="cta cta-alt" href="/go?u=' + encodeURIComponent(links.agoda) + '&partner=agoda&slug=' + encodeURIComponent(slug) + '&hotel=1" target="_blank" rel="nofollow noopener">🟠 Agoda</a><a class="cta cta-alt" href="/go?u=' + encodeURIComponent(links.expedia) + '&partner=expedia&slug=' + encodeURIComponent(slug) + '&hotel=1" target="_blank" rel="nofollow noopener">🟡 Expedia</a></div></div></div>' +
+      '<section class="sec"><h2>🏨 Why Choose ' + esc(h.name) + '?</h2><p>' + summaryText + '</p></section>' +
+      '<section class="sec"><h2>⭐ Highlights</h2><div class="highlight-grid">' + whyPoints.map(function(p){ return '<div class="hl-item">⭐ ' + p[0] + '</div>'; }).join('') + '</div></section>' +
+      '<section class="sec"><h2>❓ FAQ — ' + esc(h.name) + '</h2><div class="faq">' +
+      '<details><summary>What is the price at ' + esc(h.name) + '?</summary><p>Rates start from ' + price + '/night. Compare prices across 8 OTAs above for the best deal.</p></details>' +
+      '<details><summary>Where is ' + esc(h.name) + ' located?</summary><p>The hotel is located in ' + esc(loc) + '. Check our interactive map for exact position.</p></details>' +
+      '<details><summary>How do I book ' + esc(h.name) + '?</summary><p>Click any OTA button above. You will be redirected to the official partner site with no extra fees.</p></details>' +
+      '<details><summary>What facilities are available?</summary><p>Facilities include ' + am.join(', ') + '.</p></details>' +
+      '</div></section>' +
+      '<section class="sec"><h2>📍 Other Hotels in ' + esc(h.city_name || h.city) + '</h2><div class="grid">' + (nearby.length ? nearby.filter(function(n){ return n.slug !== h.slug; }).slice(0, 4).map(function(n){ return '<a href="/en/hotel/' + n.slug + '" class="hcard-mini"><img src="' + hotelImage(n, 400) + '" alt="' + esc(n.name) + '" loading="lazy" width="400" height="160"><div class="hmini-body"><h3>' + esc(n.name) + '</h3><div class="stars">' + '★'.repeat(n.stars || 4) + '</div><div class="price">' + fmtPrice(n.price_idr) + '</div><span class="mini-cta">View & Book →</span></div></a>'; }).join('') : '') + '</div></section>' +
+      '<section class="sec"><h2>🎮 Own This Hotel Virtually — MyTriv Monopoly</h2><p>' + esc(h.name) + ' is available as a <strong>Virtual Monopoly asset</strong>. Buy virtual ownership with TrivCoin and trade on the MyTriv Marketplace.</p><p><em>This is digital asset ownership within MyTriv ecosystem — not real-world hotel ownership.</em></p></section>' +
+      '<section class="sec"><h2>🔗 Explore More</h2><div class="link-row">' + (h.country_slug ? '<a href="/en/hotels/' + h.country_slug + '">🏨 Hotels in ' + esc(h.country_name) + '</a>' : '') + '<a href="/hotels/">🌍 All Hotels</a><a href="/book/">📖 MyTriv Book</a></div></section></div>';
+
+      res.set('Cache-Control', 'public, max-age=3600');
+      res.send(shell({ title, desc, canonical: SITE + '/en/hotel/' + slug, ogImage, body, schema, lang: 'en' }));
+    } catch(e) { console.error('en hotel page error:', e.message); res.status(500).send('error'); }
+  });
+
   // ---- Country page ----
   router.get('/hotels/:country', async (req, res) => {
     try {
