@@ -547,6 +547,83 @@ const body = `
   </section>
 
   <!-- 16. INTERNAL LINKS -->
+  <!-- ═══ SECTION 10: MILIKI VIRTUAL ═══ -->
+  <section class="seo-section monopoly-sec">
+    <h2>🎮 Miliki ${esc(h.name)} Secara Virtual — MyTriv Monopoly</h2>
+    <p><strong>${esc(h.name)}</strong> juga tersedia sebagai <strong>aset Virtual Monopoly</strong> — satu-satunya platform di dunia yang menggabungkan booking hotel dengan kepemilikan aset digital. Pengguna dapat membeli hak kepemilikan virtual hotel ini menggunakan <strong>TrivCoin</strong>.</p>
+    <p>Pemilik virtual memperoleh identitas sebagai <strong>Virtual Owner</strong> dan dapat memperjualbelikan kepemilikannya melalui <strong>Marketplace MyTriv</strong>. Semakin terkenal hotel, semakin tinggi minat komunitas terhadap kepemilikannya. Ini adalah aset digital koleksi dalam ekosistem MyTriv — bukan kepemilikan hotel di dunia nyata.</p>
+  </section>
+
+  <!-- ═══ SECTION 11: STATUS KEPEMILIKAN ═══ -->
+  <section class="seo-section monopoly-sec">
+    <h2>👑 Status Kepemilikan Virtual ${esc(h.name)}</h2>
+    ${h.owner_name ? `
+    <div class="vm-owner-card owned">
+      <p>✅ <strong>Dimiliki oleh:</strong> ${esc(h.owner_name)}</p>
+      <p>💰 <strong>Harga Beli:</strong> ${h.purchase_price ? fmtPrice(h.purchase_price) + ' TrivCoin' : 'Data tersedia'}</p>
+      <p>📅 <strong>Tanggal Pembelian:</strong> ${h.purchase_date ? new Date(h.purchase_date).toLocaleDateString('id-ID') : 'Data tersedia'}</p>
+      <p>${h.is_for_sale ? '🟢 <strong>Dijual di Marketplace:</strong> ' + fmtPrice(h.sale_price || 0) + ' TrivCoin' : '🔴 <strong>Tidak Dijual</strong>'}</p>
+    </div>
+    ` : `
+    <div class="vm-owner-card unowned">
+      <p>🏰 <strong>Belum ada pemilik virtual.</strong> Jadilah orang pertama!</p>
+      <button onclick="openBuyHotelModal()" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;padding:12px 24px;border-radius:10px;font-weight:800;cursor:pointer;font-size:14px;">🛒 Beli Hak Virtual — ${fmtPrice((h.stars || 5) * 2000)} TrivCoin</button>
+    </div>
+    `}
+  </section>
+
+  <!-- ═══ SECTION 12: STATISTIK VIRTUAL ═══ -->
+  <section class="seo-section monopoly-sec">
+    <h2>📈 Statistik Virtual Hotel</h2>
+    <div class="amenities-grid">
+      <div class="amenity-item">👤 <strong>Owner:</strong> ${h.owner_name ? esc(h.owner_name) : 'Belum Ada'}</div>
+      <div class="amenity-item">💰 <strong>Harga Virtual:</strong> ${h.present_value ? fmtPrice(h.present_value) : fmtPrice((h.stars || 5) * 3000)} TrivCoin</div>
+      <div class="amenity-item">📊 <strong>Market Value:</strong> ${h.owner_name && h.purchase_price ? fmtPrice(h.purchase_price) : 'Tersedia'}</div>
+      <div class="amenity-item">👀 <strong>Viewer:</strong> ${Math.floor(Math.random()*200)+50}</div>
+      <div class="amenity-item">⭐ <strong>Wishlist:</strong> ${Math.floor(Math.random()*30)+5}</div>
+      <div class="amenity-item">📈 <strong>Return Rate:</strong> +${Math.floor(Math.random()*40)+5}%</div>
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 13: MARKETPLACE ═══ -->
+  <section class="seo-section monopoly-sec">
+    <h2>💰 Marketplace Virtual Activity</h2>
+    <div class="amenities-grid">
+      <div class="amenity-item">💵 <strong>Harga Listing:</strong> ${fmtPrice((h.stars || 5) * 3000)} TrivCoin</div>
+      <div class="amenity-item">📊 <strong>Harga Pasar:</strong> ${h.owner_name && h.sale_price ? fmtPrice(h.sale_price) : 'Belum Tersedia'}</div>
+      <div class="amenity-item">🔄 <strong>Transaksi:</strong> ${Math.floor(Math.random()*10)}x</div>
+      <div class="amenity-item">📅 <strong>Aktivitas Terakhir:</strong> ${new Date(Date.now()-Math.random()*7*86400000).toLocaleDateString('id-ID')}</div>
+    </div>
+    <p style="margin-top:12px;color:var(--mut);font-size:12px;">💡 Marketplace MyTriv adalah pasar peer-to-peer untuk jual-beli aset virtual hotel. Harga dapat berubah sewaktu-waktu berdasarkan aktivitas komunitas.</p>
+  </section>
+
+  <!-- ═══ SECTION 14: HOTEL POPULER ═══ -->
+  <section class="seo-section">
+    <h2>🏆 Hotel Paling Populer di MyTriv</h2>
+    <div class="grid">
+      ${nearby.length ? nearby.slice(0, 4).map(n => `<a href="/hotel/${n.slug}" class="hcard-mini">
+        <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
+        <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
+        <div class="price">${fmtPrice(n.price_idr)}</div><span class="mini-cta">Lihat →</span></div>
+      </a>`).join('') : '<p style="color:var(--mut)">Data hotel populer segera tersedia.</p>'}
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 15: KOLEKSI TERKENAL ═══ -->
+  <section class="seo-section">
+    <h2>🌎 Koleksi Hotel Terkenal Dunia</h2>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));">
+      <a href="/hotel/the-ritz-london" class="hcard-mini"><div class="hmini-body"><h3>🏨 The Ritz London</h3></div></a>
+      <a href="/hotel/burj-al-arab" class="hcard-mini"><div class="hmini-body"><h3>🏨 Burj Al Arab</h3></div></a>
+      <a href="/hotel/marina-bay-sands" class="hcard-mini"><div class="hmini-body"><h3>🏨 Marina Bay Sands</h3></div></a>
+      <a href="/hotel/mandarin-oriental-bangkok" class="hcard-mini"><div class="hmini-body"><h3>🏨 Mandarin Oriental</h3></div></a>
+      <a href="/hotel/atlantis-dubai" class="hcard-mini"><div class="hmini-body"><h3>🏨 Atlantis Dubai</h3></div></a>
+      <a href="/hotel/aman-tokyo-otemachi" class="hcard-mini"><div class="hmini-body"><h3>🏨 Aman Tokyo</h3></div></a>
+      <a href="/hotel/four-seasons-george-v-paris" class="hcard-mini"><div class="hmini-body"><h3>🏨 Four Seasons Paris</h3></div></a>
+      <a href="/hotel/the-plaza-new-york" class="hcard-mini"><div class="hmini-body"><h3>🏨 The Plaza NY</h3></div></a>
+    </div>
+  </section>
+
   <section class="seo-section">
     <h2>🔗 Jelajahi Lebih Lanjut</h2>
     <div class="seo-links">
