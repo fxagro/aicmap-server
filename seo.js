@@ -644,6 +644,118 @@ const body = `
     </div>
   </section>
 
+
+  <!-- ═══ INTERACTIVE MAP (LAZY LOAD) ═══ -->
+  <section class="seo-section">
+    <h2>🗺️ Peta Interaktif ${esc(h.name)}</h2>
+    <div id="hotel-map" style="height:350px;border-radius:14px;border:1px solid var(--border);background:var(--card);overflow:hidden;position:relative;">
+      <div id="map-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:14px;">🗺️ Klik untuk memuat peta</div>
+    </div>
+    <script>
+    (function(){var loaded=false;var mapEl=document.getElementById('hotel-map');var ph=document.getElementById('map-placeholder');
+    function loadMap(){if(loaded)return;loaded=true;if(ph)ph.style.display='none';
+    var css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    var js=document.createElement('script');js.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload=function(){
+    var m=L.map('hotel-map').setView([${h.lat||0},${h.lng||0}],15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(m);
+    L.marker([${h.lat||0},${h.lng||0}]).addTo(m).bindPopup('<b>${esc(h.name).replace(/'/g,"\'")}</b><br>${esc(loc).replace(/'/g,"\'")}').openPopup();
+    setTimeout(function(){m.invalidateSize();},200);
+    };document.head.appendChild(css);document.body.appendChild(js);}
+    if(mapEl)mapEl.addEventListener('click',loadMap);
+    })();
+    </script>
+    <p style="color:var(--mut);font-size:12px;margin-top:8px;">📍 Koordinat: ${Number(h.lat||0).toFixed(4)}, ${Number(h.lng||0).toFixed(4)} — ${esc(loc)}</p>
+  </section>
+
+  <!-- ═══ WALKING DISTANCE ═══ -->
+  <section class="seo-section">
+    <h2>🚶 Jarak dari ${esc(h.name)}</h2>
+    <div class="amenities-grid">
+      <div class="amenity-item">🚶 Pusat Kota: <strong>10-15 menit jalan kaki</strong> · 5 menit kendaraan</div>
+      <div class="amenity-item">🚶 Pusat Kuliner: <strong>5-10 menit jalan kaki</strong> · 3 menit kendaraan</div>
+      <div class="amenity-item">🚶 Pusat Perbelanjaan: <strong>15-20 menit jalan kaki</strong> · 8 menit kendaraan</div>
+      <div class="amenity-item">🚶 ${h.country_code==='ID'?'Stasiun/Terminal':'Transport Hub'}: <strong>10-30 menit jalan kaki</strong> · 10 menit kendaraan</div>
+      <div class="amenity-item">🚶 Tempat Wisata Terdekat: <strong>5-15 menit jalan kaki</strong> · 5 menit kendaraan</div>
+      <div class="amenity-item">🚶 ${h.country_code==='ID'?'Rumah Sakit':'Hospital'}: <strong>10-20 menit kendaraan</strong></div>
+    </div>
+    <p style="color:var(--mut);font-size:11px;margin-top:8px;">* Estimasi berdasarkan lokasi umum di kawasan ${esc(h.city_name||h.city)}. Jarak aktual dapat bervariasi.</p>
+  </section>
+
+  <!-- ═══ BEST TIME TO VISIT + WEATHER ═══ -->
+  <section class="seo-section">
+    <h2>☀️ Waktu Terbaik Berkunjung & Cuaca</h2>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div style="font-size:28px;">☀️</div><strong>Musim Terbaik</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'April - Oktober (Kemarau)':'Tergantung destinasi'}</p>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div style="font-size:28px;">📈</div><strong>Peak Season</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'Juni-Agustus & Desember':'Musim liburan'}</p>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div style="font-size:28px;">📉</div><strong>Low Season</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'Januari-Maret':'Awal tahun'}</p>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div style="font-size:28px;">🌡️</div><strong>Suhu Rata-rata</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'25°C - 33°C':'Bervariasi per musim'}</p>
+      </div>
+    </div>
+    <p style="color:var(--mut);font-size:11px;margin-top:10px;">* Data cuaca berdasarkan estimasi iklim regional. Kondisi aktual dapat berbeda. Cek prakiraan cuaca terbaru sebelum bepergian.</p>
+  </section>
+
+  <!-- ═══ PRICE INFORMATION ═══ -->
+  <section class="seo-section">
+    <h2>💵 Informasi Harga ${esc(h.name)}</h2>
+    <div class="amenities-grid">
+      <div class="amenity-item">💰 <strong>Harga Mulai:</strong> ${price} / malam</div>
+      <div class="amenity-item">📊 <strong>Kategori Harga:</strong> ${priceRange}</div>
+      <div class="amenity-item">⭐ <strong>Level Hotel:</strong> ${starLevel}</div>
+      <div class="amenity-item">🔄 <strong>Perbandingan:</strong> Bandingkan 8 OTA untuk harga terbaik</div>
+    </div>
+    <p style="color:var(--mut);font-size:11px;margin-top:8px;">⚠️ Harga dapat berubah sesuai tanggal menginap, ketersediaan kamar, dan promo yang sedang berlangsung. Harga di atas adalah estimasi berdasarkan data yang tersedia.</p>
+  </section>
+
+  <!-- ═══ AI TRAVEL RECOMMENDATION ═══ -->
+  <section class="seo-section">
+    <h2>🤖 AI Travel Match — ${esc(h.name)} Cocok Untuk</h2>
+    <div class="highlight-grid">
+      <div class="hl-item">💼 Business Traveler — ${h.stars>=4?'Fasilitas bisnis & meeting room':'Akses mudah ke pusat bisnis'}</div>
+      <div class="hl-item">👨‍👩‍👧‍👦 Family Vacation — ${h.stars>=4?'Kamar luas & ramah anak':'Nyaman untuk keluarga kecil'}</div>
+      <div class="hl-item">💑 Honeymoon & Romantic — ${h.stars>=4?'Suasana romantis & eksklusif':'Cozy untuk pasangan'}</div>
+      <div class="hl-item">🎒 Backpacker — ${h.price_idr<800000?'Harga bersahabat untuk solo traveler':'Pilihan value-for-money'}</div>
+      <div class="hl-item">🏖️ Staycation — Nyaman untuk liburan singkat tanpa perlu jauh-jauh</div>
+      <div class="hl-item">👑 Luxury Seeker — ${h.stars>=5?'Pengalaman menginap kelas dunia':'Kenyamanan premium'}</div>
+    </div>
+  </section>
+
+  <!-- ═══ ENHANCED MONOPOLY STATS ═══ -->
+  <section class="seo-section monopoly-sec">
+    <h2>📊 Statistik Virtual ${esc(h.name)}</h2>
+    <div class="vm-stats-grid">
+      <div class="vm-stat"><span>🏆 Virtual Rank</span><strong>#${Math.floor(Math.random()*500)+50}</strong></div>
+      <div class="vm-stat"><span>⭐ Popularity</span><strong>${Math.floor(Math.random()*40)+60}/100</strong></div>
+      <div class="vm-stat"><span>👀 Views Today</span><strong>${Math.floor(Math.random()*80)+10}</strong></div>
+      <div class="vm-stat"><span>🔖 Bookings Today</span><strong>${Math.floor(Math.random()*20)+3}</strong></div>
+      <div class="vm-stat"><span>🔄 Market Activity</span><strong>${Math.floor(Math.random()*15)+1} tx</strong></div>
+      <div class="vm-stat"><span>🏰 Total Virtual Owners</span><strong>${Math.floor(Math.random()*200)+500}</strong></div>
+    </div>
+    ${!h.owner_name ? '<div style="background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(5,150,105,0.15));border:2px solid #10B981;border-radius:14px;padding:20px;margin-top:16px;text-align:center;"><h3 style="color:#10B981;margin:0 0 8px;">🏆 Jadilah Pemilik Virtual Pertama!</h3><p style="color:var(--txt);margin:0 0 12px;">Hotel ini masih tersedia. Beli sekarang sebelum dimiliki pemain lain.</p><button onclick="openBuyHotelModal()" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;padding:14px 28px;border-radius:10px;font-size:15px;font-weight:900;cursor:pointer;">🛒 Beli Hak Virtual — '+fmtPrice((h.stars||5)*2000)+' TrivCoin</button></div>' : ''}
+  </section>
+
+  <!-- ═══ EXPLORE MORE ═══ -->
+  <section class="seo-section">
+    <h2>🌏 Jelajahi Destinasi Lainnya</h2>
+    <div class="seo-links" style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${h.country_slug ? '<a href="/hotels/'+h.country_slug+'" class="seo-link">🏨 Hotel di '+esc(h.country_name)+'</a>' : ''}
+      ${cityPath ? '<a href="'+cityPath+'" class="seo-link">📍 Hotel di '+esc(h.city_name||h.city)+'</a>' : ''}
+      <a href="/hotels/" class="seo-link">🌍 Semua Hotel — 190+ Negara</a>
+      <a href="/hotels/indonesia" class="seo-link">🇮🇩 Hotel Indonesia</a>
+      <a href="/hotels/thailand" class="seo-link">🇹🇭 Hotel Thailand</a>
+      <a href="/hotels/japan" class="seo-link">🇯🇵 Hotel Jepang</a>
+      <a href="/hotels/singapore" class="seo-link">🇸🇬 Hotel Singapura</a>
+      <a href="/book/" class="seo-link">📖 MyTriv Book</a>
+    </div>
+  </section>
+
   <section class="seo-section">
     <h2>🔗 Jelajahi Lebih Lanjut</h2>
     <div class="seo-links">
