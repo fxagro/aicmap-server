@@ -124,9 +124,18 @@ function partnerLinks(generatePartnerLink, hotel, citySlug) {
 
 function jsonLd(html) { return `<script type="application/ld+json">${JSON.stringify(html)}</script>`; }
 
-function shell({ title, desc, canonical, ogImage, body, schema }) {
+function shell({ title, desc, canonical, ogImage, body, schema, lang = 'id' }) {
+  const t = lang === 'en' ? {
+    home: 'Home', hotels: 'Hotels', book: 'Book', about: 'About',
+    theme_dark: '🌙 Dark', theme_light: '☀️ Light',
+    lang_en: '🇬🇧 EN', lang_id: '🇮🇩 ID'
+  } : {
+    home: 'Beranda', hotels: 'Hotel', book: 'Booking', about: 'Panduan',
+    theme_dark: '🌙 Gelap', theme_light: '☀️ Terang',
+    lang_en: '🇬🇧 EN', lang_id: '🇮🇩 ID'
+  };
   return `<!DOCTYPE html>
-<html lang="id">
+<html lang="${lang}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -143,7 +152,8 @@ function shell({ title, desc, canonical, ogImage, body, schema }) {
 <link rel="preconnect" href="https://images.unsplash.com">
 ${schema ? jsonLd(schema) : ''}
 <style>
-:root{--cy:#00F0FF;--bg:#060B13;--card:#0e1624;--txt:#E2E8F0;--mut:#94A3B8;}
+:root{--cy:#00F0FF;--bg:#060B13;--card:#0e1624;--txt:#E2E8F0;--mut:#94A3B8;--border:#1e293b;}
+:root[data-theme="light"]{--cy:#0284C7;--bg:#F8FAFC;--card:#FFFFFF;--txt:#1E293B;--mut:#64748B;--border:#E2E8F0;}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--txt);line-height:1.6}
 a{color:var(--cy);text-decoration:none}
@@ -194,7 +204,10 @@ footer a{color:var(--cy)}
 ${body}
 <footer><p>MyTriv Hotels — Interactive World Hotel Map. Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka, Expedia).</p>
 <p><a href="/sitemap.xml">Sitemap</a> · <a href="/hotels">Peta Interaktif</a> · © 2026 MyTriv</p></footer>
-</body>
+<script>
+(function(){var m=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',m);})();
+function toggleTheme(){var e=document.documentElement;var c=e.getAttribute('data-theme')==='light'?'dark':'light';e.setAttribute('data-theme',c);localStorage.setItem('theme',c);var b=document.getElementById('theme-toggle');if(b)b.innerText=c==='light'?'🌙 Gelap':'☀️ Terang';}
+</script></body>
 </html>`;
 }
 
