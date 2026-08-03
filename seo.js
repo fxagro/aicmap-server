@@ -203,13 +203,17 @@ footer a{color:var(--cy)}
 </head>
 <body>
 <header><a href="/" class="logo">MyTriv <span>Hotels</span></a><nav>
-<a href="/hotels">Hotel Map</a><a href="/hotels/indonesia">Indonesia</a><a href="/hotels/japan">Japan</a><a href="/hotels/thailand">Thailand</a></nav></header>
+<a href="/hotels">Hotel Map</a>
+<a href="/hotels/indonesia">Indonesia</a>
+<a href="/book">Booking</a>
+<button id="theme-toggle" onclick="toggleTheme()" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:700;">🌙 Dark</button>
+</nav></header>
 ${body}
 <footer><p>MyTriv Hotels — Interactive World Hotel Map. Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka, Expedia).</p>
 <p><a href="/sitemap.xml">Sitemap</a> · <a href="/hotels">Peta Interaktif</a> · © 2026 MyTriv</p></footer>
 <script>
 (function(){var m=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',m);})();
-function toggleTheme(){var e=document.documentElement;var c=e.getAttribute('data-theme')==='light'?'dark':'light';e.setAttribute('data-theme',c);localStorage.setItem('theme',c);var b=document.getElementById('theme-toggle');if(b)b.innerText=c==='light'?'🌙 Gelap':'☀️ Terang';}
+function toggleTheme(){var e=document.documentElement;var c=e.getAttribute('data-theme')==='light'?'dark':'light';e.setAttribute('data-theme',c);localStorage.setItem('theme',c);var b=document.getElementById('theme-toggle');if(b)b.innerText=c==='light'?'🌙 Dark':'☀️ Light';}
 </script></body>
 </html>`;
 }
