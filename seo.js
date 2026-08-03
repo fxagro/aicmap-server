@@ -206,7 +206,7 @@ footer a{color:var(--cy)}
 <a href="/hotels">Hotel Map</a>
 <a href="/hotels/indonesia">Indonesia</a>
 <a href="/book">Booking</a>
-<button id="theme-toggle" onclick="toggleTheme()" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:700;">🌙 Dark</button>
+<a href="${canonical.replace('/en/','/')}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">🇮🇩 ID</a> <a href="${canonical.includes('/en/') ? canonical : canonical.replace('/hotel/','/en/hotel/')}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">🇬🇧 EN</a> <button id="theme-toggle" onclick="toggleTheme()" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:700;">🌙 Dark</button>
 </nav></header>
 ${body}
 <footer><p>MyTriv Hotels — Interactive World Hotel Map. Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka, Expedia).</p>
