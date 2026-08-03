@@ -557,6 +557,12 @@ Sitemap: ${SITE}/sitemap.xml
     } catch (e) { console.error('country page error:', e.message); res.status(500).send('error'); }
   });
 
+  // Island-level destinations for region pages (bali/java)
+  const SEO_ISLAND_REGIONS = {
+    'bali': ['bali'],
+    'java': ['banten', 'dki jakarta', 'jakarta', 'jawa barat', 'jawa tengah', 'di yogyakarta', 'yogyakarta', 'jawa timur']
+  };
+
   // ---- City page ----
   router.get('/hotels/:country/:city', async (req, res) => {
     try {
@@ -568,8 +574,12 @@ Sitemap: ${SITE}/sitemap.xml
       if (!rows.length) return res.status(404).send('Not found');
       const c = rows[0];
       const isRegion = c.region && c.region === c.name;
+      const islandRegions = SEO_ISLAND_REGIONS[c.slug];
       let totalRes, hotels;
-      if (isRegion) {
+      if (islandRegions) {
+        totalRes = await pool.query('SELECT count(*)::int AS n FROM hotels h JOIN cities cc2 ON cc2.id = h.city_id WHERE LOWER(COALESCE(cc2.region,\'\')) = ANY($1::text[])', [islandRegions]);
+        hotels = await pool.query(`SELECT h.*, cc2.name AS city_name FROM hotels h JOIN cities cc2 ON cc2.id = h.city_id WHERE LOWER(COALESCE(cc2.region,\'\')) = ANY($1::text[]) ORDER BY h.rating DESC NULLS LAST, h.reviews DESC NULLS LAST LIMIT 300`, [islandRegions]);
+      } else if (isRegion) {
         totalRes = await pool.query('SELECT count(*)::int AS n FROM hotels h JOIN cities cc2 ON cc2.id = h.city_id WHERE cc2.region = $1', [c.region]);
         hotels = await pool.query(`SELECT h.*, cc2.name AS city_name FROM hotels h JOIN cities cc2 ON cc2.id = h.city_id WHERE cc2.region = $1 ORDER BY h.rating DESC NULLS LAST, h.reviews DESC NULLS LAST LIMIT 300`, [c.region]);
       } else {
