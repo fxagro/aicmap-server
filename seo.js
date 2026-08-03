@@ -116,6 +116,9 @@ function partnerLinks(generatePartnerLink, hotel, citySlug) {
     trip: `https://www.trip.com/hotels/list?keyword=${encodeURIComponent(cityName)}&Allianceid=${marker}`,
     traveloka: `https://www.traveloka.com/en-id/hotel/search?spec=${encodeURIComponent(cityName)}&marker=${marker}`,
     expedia: `https://www.expedia.com/Hotel-Search?destination=${encodeURIComponent(cityName)}`,
+    hotelscom: `https://www.hotels.com/Hotel-Search?destination=${encodeURIComponent(cityName)}`,
+    kayak: `https://www.kayak.com/hotels/${encodeURIComponent(cityName)}/2026-08-10/2026-08-11/2adults`,
+    klook: `https://www.klook.com/search/result/?query=${encodeURIComponent(cityName)}&search_scope=main_search`,
   };
 }
 
@@ -366,6 +369,9 @@ const body = `
         <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.trip)}&partner=trip&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟣 Trip.com</a>
         <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.traveloka)}&partner=traveloka&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟢 Traveloka</a>
         <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.expedia)}&partner=expedia&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟡 Expedia</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.hotelscom)}&partner=hotelscom&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔴 Hotels.com</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.kayak)}&partner=kayak&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">⚫ Kayak</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.klook)}&partner=klook&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟠 Klook</a>
       </div>
     </div>
   </div>
