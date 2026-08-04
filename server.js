@@ -1883,6 +1883,52 @@ app.get('/api/hotel-poi', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ---------- Google OAuth (SSO reuse of existing client) ----------
+function loadDotEnv() { try { const s = require('fs').readFileSync(__dirname + '/.env', 'utf8'); s.split('\n').forEach(function (l) { const i = l.indexOf('='); if (i > 0 && l.trim()[0] !== '#') { const k = l.slice(0, i).trim(); const v = l.slice(i + 1).trim(); if (!process.env[k]) process.env[k] = v; } }); } catch (e) {} }
+loadDotEnv();
+const AUTH = {
+  clientId: process.env.GOOGLE_CLIENT_ID || '',
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  redirectUri: process.env.GOOGLE_REDIRECT_URI || 'https://mytriv.com/auth/callback',
+  cookieName: process.env.AUTH_COOKIE_NAME || 'mt_auth',
+  jwtSecret: process.env.AUTH_JWT_SECRET || 'dev-secret-change-me',
+  sessionDays: parseInt(process.env.AUTH_SESSION_DAYS || '30', 10),
+  secureCookie: process.env.AUTH_SECURE_COOKIE !== 'false'
+};
+function b64u(s) { return Buffer.from(s).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_'); }
+function b64uDec(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Buffer.from(s, 'base64'); }
+function hmacB64u(parts) { return b64u(require('crypto').createHmac('sha256', AUTH.jwtSecret).update(parts.join('.')).digest()); }
+function signAuthToken(payload) { const h = b64u(JSON.stringify({ alg: 'HS256', typ: 'JWT' })); const p = b64u(JSON.stringify(payload)); return h + '.' + p + '.' + hmacB64u([h, p]); }
+function verifyAuthToken(token) { try { const parts = String(token).split('.'); if (parts.length !== 3) return null; if (hmacB64u([parts[0], parts[1]]) !== parts[2]) return null; const payload = JSON.parse(b64uDec(parts[1]).toString('utf8')); if (payload.exp && Date.now() > payload.exp * 1000) return null; return payload; } catch (e) { return null; } }
+function parseCookies(header) { const out = {}; String(header || '').split(';').forEach(function (p) { const i = p.indexOf('='); if (i > 0) { const k = p.slice(0, i).trim(); const v = decodeURIComponent(p.slice(i + 1).trim()); if (v) out[k] = v; } }); return out; }
+function authCookieHeader(token, maxAgeSec) { return AUTH.cookieName + '=' + token + '; Max-Age=' + maxAgeSec + '; Path=/; HttpOnly; SameSite=Lax' + (AUTH.secureCookie ? '; Secure' : ''); }
+function safeRedirect(target) { const t = String(target || '/'); if (t[0] === '/' && t[1] !== '/') return t; return '/'; }
+function googleLoginUrl(state) { const p = new URLSearchParams(); p.set('client_id', AUTH.clientId); p.set('redirect_uri', AUTH.redirectUri); p.set('response_type', 'code'); p.set('scope', 'openid email profile'); p.set('access_type', 'online'); p.set('prompt', 'select_account'); if (state) p.set('state', state); return 'https://accounts.google.com/o/oauth2/v2/auth?' + p.toString(); }
+function attachUser(req, res, next) { try { const c = parseCookies(req.headers.cookie); req.user = c[AUTH.cookieName] ? verifyAuthToken(c[AUTH.cookieName]) || null : null; } catch (e) { req.user = null; } next(); }
+app.use(attachUser);
+app.get('/auth/login', function (req, res) { if (!AUTH.clientId) return res.status(500).send('Auth not configured'); const state = b64u(JSON.stringify({ redirect: safeRedirect(req.query.redirect) })); res.redirect(googleLoginUrl(state)); });
+app.get('/auth/callback', async function (req, res) {
+  try {
+    const code = req.query.code, state = req.query.state;
+    if (req.query.error) { let r = '/'; try { if (state) r = safeRedirect(JSON.parse(b64uDec(state).toString('utf8')).redirect || '/'); } catch (e) {} return res.redirect(r + (r.indexOf('?') > -1 ? '&' : '?') + 'auth=denied'); }
+    if (!code) return res.status(400).send('Missing authorization code');
+    const tokenBody = new URLSearchParams({ client_id: AUTH.clientId, client_secret: AUTH.clientSecret, code: String(code), grant_type: 'authorization_code', redirect_uri: AUTH.redirectUri }).toString();
+    const tokenResp = await new Promise(function (ok, no) { const rq = https.request({ hostname: 'oauth2.googleapis.com', path: '/token', method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(tokenBody) } }, function (r) { let d = ''; r.on('data', function (c) { d += c; }); r.on('end', function () { try { ok(JSON.parse(d)); } catch (e) { no(e); } }); }); rq.on('error', no); rq.setTimeout(15000, function () { rq.destroy(); no(new Error('timeout')); }); rq.write(tokenBody); rq.end(); });
+    if (!tokenResp.access_token) return res.status(401).send('Token exchange failed');
+    const userResp = await new Promise(function (ok, no) { const rq = https.get({ hostname: 'www.googleapis.com', path: '/oauth2/v2/userinfo', headers: { Authorization: 'Bearer ' + tokenResp.access_token } }, function (r) { let d = ''; r.on('data', function (c) { d += c; }); r.on('end', function () { try { ok(JSON.parse(d)); } catch (e) { no(e); } }); }); rq.on('error', no); rq.setTimeout(15000, function () { rq.destroy(); no(new Error('timeout')); }); });
+    if (!userResp || !userResp.email) return res.status(401).send('Google profile missing email');
+    const q = await pool.query('INSERT INTO users (google_id, email, name, avatar_url) VALUES ($1,$2,$3,$4) ON CONFLICT (google_id) DO UPDATE SET email=$2, name=$3, avatar_url=COALESCE($4, users.avatar_url), updated_at=NOW() RETURNING id, google_id, email, name, avatar_url, role', [String(userResp.id || userResp.sub), userResp.email, userResp.name || 'Google User', userResp.picture || null]);
+    const u = q.rows[0];
+    const exp = Math.floor(Date.now() / 1000) + AUTH.sessionDays * 86400;
+    const token = signAuthToken({ sub: String(u.id), email: u.email, name: u.name, avatar: u.avatar_url, role: u.role, exp });
+    res.setHeader('Set-Cookie', authCookieHeader(token, AUTH.sessionDays * 86400));
+    let redirect = '/'; try { if (state) redirect = safeRedirect(JSON.parse(b64uDec(state).toString('utf8')).redirect || '/'); } catch (e) {}
+    res.redirect(redirect);
+  } catch (e) { res.status(500).send('Auth error: ' + e.message); }
+});
+app.get('/auth/logout', function (req, res) { res.setHeader('Set-Cookie', authCookieHeader('', 0)); res.redirect(safeRedirect(req.query.redirect)); });
+app.get('/auth/me', function (req, res) { if (!req.user) return res.status(401).json({ user: null }); res.json({ user: { id: req.user.sub, email: req.user.email, name: req.user.name, avatar: req.user.avatar, role: req.user.role } }); });
+
 const createSeoRouter = require('./seo');
 app.use(createSeoRouter({ pool, generatePartnerLink: generateTravelpayoutsPartnerLink }));
 

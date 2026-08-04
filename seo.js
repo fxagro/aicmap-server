@@ -130,7 +130,8 @@ function partnerLinks(generatePartnerLink, hotel, citySlug) {
 
 function jsonLd(html) { return `<script type="application/ld+json">${JSON.stringify(html)}</script>`; }
 
-function shell({ title, desc, canonical, ogImage, body, schema, lang = 'id' }) {
+function shell({ title, desc, canonical, ogImage, body, schema, lang = 'id', user = null }) {
+  const backPath = encodeURIComponent(canonical.replace(/^https?:\/\/[^\/]+/, '') || '/');
   const t = lang === 'en' ? {
     home: 'Home', hotels: 'Hotels', book: 'Book', about: 'About',
     theme_dark: '🌙 Dark', theme_light: '☀️ Light',
@@ -213,6 +214,7 @@ footer a{color:var(--cy)}
 <a href="/hotels/indonesia">Indonesia</a>
 <a href="/book">Booking</a>
 <a href="${canonical.replace('/en/','/')}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">🇮🇩 ID</a> <a href="${canonical.includes('/en/') ? canonical : canonical.replace('/hotel/','/en/hotel/')}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">🇬🇧 EN</a> <button id="theme-toggle" onclick="toggleTheme()" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:700;">🌙 Dark</button>
+${user ? `<a href="/auth/logout?redirect=${backPath}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">👤 ${esc(user.name || user.email)} · Keluar</a>` : `<a href="/auth/login?redirect=${backPath}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">🔐 Masuk</a>`}
 </nav></header>
 ${body}
 <footer style="padding:32px 24px;border-top:1px solid var(--border);margin-top:40px;color:var(--mut);font-size:13px;line-height:2;"><div style="max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;"><div><strong style="color:var(--txt);">Top Countries</strong><br><a href="/hotels/indonesia">Indonesia</a><br><a href="/hotels/thailand">Thailand</a><br><a href="/hotels/japan">Japan</a><br><a href="/hotels/singapore">Singapore</a><br><a href="/hotels/malaysia">Malaysia</a></div><div><strong style="color:var(--txt);">Popular Cities</strong><br><a href="/hotels/indonesia/bali">Bali</a><br><a href="/hotels/thailand/bangkok">Bangkok</a><br><a href="/hotels/japan/tokyo">Tokyo</a><br><a href="/hotels/france/paris">Paris</a><br><a href="/hotels/united-kingdom/london">London</a></div><div><strong style="color:var(--txt);">MyTriv</strong><br><a href="/hotels/">Peta Interaktif</a><br><a href="/book/">Booking</a><br><a href="/hotels/about.html">Panduan Monopoly</a><br><a href="/hotels/">190+ Negara</a></div><div><strong style="color:var(--txt);">Partners</strong><br><span>Booking · Agoda · Trip<br>Traveloka · Expedia<br>Hotels.com · Kayak · Klook</span></div></div><p style="text-align:center;margin-top:20px;">MyTriv Hotels — 120.000+ hotel di 190+ negara. Bandingkan 8 OTA. Virtual Monopoly.</p><p style="text-align:center;font-size:11px;">© 2026 MyTriv · Harga estimasi</p> Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka, Expedia).</p>
@@ -311,7 +313,7 @@ Sitemap: ${SITE}/sitemap.xml
         LEFT JOIN countries cc ON cc.code = c.country_code
         LEFT JOIN virtual_hotel_ownership vho ON vho.hotel_slug = h.slug
         WHERE h.slug = $1`, [slug]);
-      if (!rows.length) return res.status(404).send(shell({ title: 'Hotel tidak ditemukan - MyTriv Hotels', desc: 'Hotel tidak ditemukan', canonical: SITE + req.path, ogImage: hotelImage({}, 800), body: '<div class="wrap"><h1>Hotel tidak ditemukan</h1></div>' }));
+      if (!rows.length) return res.status(404).send(shell({ title: 'Hotel tidak ditemukan - MyTriv Hotels', desc: 'Hotel tidak ditemukan', canonical: SITE + req.path, ogImage: hotelImage({}, 800), body: '<div class="wrap"><h1>Hotel tidak ditemukan</h1></div>', user: req.user }));
       const h = rows[0];
       h.stars = sanStars(h.stars);
       h.rating = sanRating(h.rating);
@@ -808,7 +810,7 @@ const body = `
 
 </div>`
       res.set('Cache-Control', 'public, max-age=3600');
-      res.send(shell({ title, desc, canonical: `${SITE}/hotel/${slug}`, ogImage, body, schema }));
+      res.send(shell({ title, desc, canonical: `${SITE}/hotel/${slug}`, ogImage, body, schema, user: req.user }));
     } catch (e) { console.error('hotel page error:', e.message); res.status(500).send('error'); }
   });
 
@@ -824,7 +826,7 @@ const body = `
         LEFT JOIN countries cc ON cc.code = c.country_code
         LEFT JOIN virtual_hotel_ownership vho ON vho.hotel_slug = h.slug
         WHERE h.slug = $1`, [slug]);
-      if (!rows.length) return res.status(404).send(shell({ title: 'Hotel not found - MyTriv Hotels', desc: 'Hotel not found', canonical: SITE + req.path, ogImage: hotelImage({}, 800), body: '<div class="wrap"><h1>Hotel not found</h1></div>', lang: 'en' }));
+      if (!rows.length) return res.status(404).send(shell({ title: 'Hotel not found - MyTriv Hotels', desc: 'Hotel not found', canonical: SITE + req.path, ogImage: hotelImage({}, 800), body: '<div class="wrap"><h1>Hotel not found</h1></div>', lang: 'en', user: req.user }));
       const h = rows[0];
       h.stars = sanStars(h.stars);
       h.rating = sanRating(h.rating);
@@ -897,7 +899,7 @@ const body = `
       '<section class="sec"><h2>🔗 Explore More</h2><div class="link-row">' + (h.country_slug ? '<a href="/en/hotels/' + h.country_slug + '">🏨 Hotels in ' + esc(h.country_name) + '</a>' : '') + '<a href="/hotels/">🌍 All Hotels</a><a href="/book/">📖 MyTriv Book</a></div></section></div>';
 
       res.set('Cache-Control', 'public, max-age=3600');
-      res.send(shell({ title, desc, canonical: SITE + '/en/hotel/' + slug, ogImage, body, schema, lang: 'en' }));
+      res.send(shell({ title, desc, canonical: SITE + '/en/hotel/' + slug, ogImage, body, schema, lang: 'en', user: req.user }));
     } catch(e) { console.error('en hotel page error:', e.message); res.status(500).send('error'); }
   });
 
@@ -937,7 +939,7 @@ const body = `
 </div>`;
       const schema = { '@context': 'https://schema.org', '@type': 'Country', name: c.name, url: SITE + '/hotels/' + country };
       res.set('Cache-Control', 'public, max-age=3600');
-      res.send(shell({ title, desc, canonical: `${SITE}/hotels/${country}`, ogImage: hotelImage({}, 800), body, schema }));
+      res.send(shell({ title, desc, canonical: `${SITE}/hotels/${country}`, ogImage: hotelImage({}, 800), body, schema, user: req.user }));
     } catch (e) { console.error('country page error:', e.message); res.status(500).send('error'); }
   });
 
@@ -999,7 +1001,7 @@ const body = `
 </div>`;
       const schema = { '@context': 'https://schema.org', '@type': 'City', name: c.name, url: SITE + '/hotels/' + country + '/' + city };
       res.set('Cache-Control', 'public, max-age=3600');
-      res.send(shell({ title, desc, canonical: `${SITE}/hotels/${country}/${city}`, ogImage: hotelImage({}, 800), body, schema }));
+      res.send(shell({ title, desc, canonical: `${SITE}/hotels/${country}/${city}`, ogImage: hotelImage({}, 800), body, schema, user: req.user }));
     } catch (e) { console.error('city page error:', e.message); res.status(500).send('error'); }
   });
 
