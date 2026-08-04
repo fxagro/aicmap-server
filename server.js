@@ -6,6 +6,31 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Simple in-memory rate limiter untuk endpoint game (per IP)
+const rateBuckets = new Map();
+function rateLimit(maxPerMin = 60) {
+  return (req, res, next) => {
+    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    const win = rateBuckets.get(ip);
+    if (!win || now - win.ts > 60000) {
+      rateBuckets.set(ip, { count: 1, ts: now });
+      return next();
+    }
+    if (win.count >= maxPerMin) {
+      return res.status(429).json({ error: 'Terlalu banyak permintaan. Coba lagi sebentar.' });
+    }
+    win.count++;
+    next();
+  };
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of rateBuckets) {
+    if (now - v.ts > 120000) rateBuckets.delete(k);
+  }
+}, 60000);
+
 // Shared seeded hotel-photo pool (must stay in sync with app.js / seo.js)
 const HOTEL_IMG_POOL = [
   'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=1200&auto=format&fit=crop&q=70',
@@ -60,7 +85,10 @@ function hotelImgUrl(seedKey) {
 
 // Database Connections
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://aicmap:MyTrivAI2026!@127.0.0.1:5432/aicmap'
+  connectionString: process.env.DATABASE_URL || 'postgres://aicmap:MyTrivAI2026!@127.0.0.1:5432/aicmap',
+  max: 30,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000
 });
 
 const eduPool = new Pool({
@@ -138,14 +166,22 @@ app.post('/api/auth/sso-login', async (req, res) => {
 });
 
 // 1. Get All Monopoly Properties
+const propsCache = { data: null, ts: 0 };
 app.get('/api/monopoly/properties', async (req, res) => {
   try {
+    if (propsCache.data && Date.now() - propsCache.ts < 30000) {
+      res.set('Cache-Control', 'public, max-age=30');
+      return res.json(propsCache.data);
+    }
     const result = await pool.query(`
       SELECT p.*, pl.name as owner_name, pl.country as owner_country
       FROM monopoly_properties p
       LEFT JOIN monopoly_players pl ON p.owner_id = pl.member_id
       ORDER BY p.id ASC
     `);
+    propsCache.data = result.rows;
+    propsCache.ts = Date.now();
+    res.set('Cache-Control', 'public, max-age=30');
     res.json(result.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -337,8 +373,13 @@ app.get('/api/leaderboard', async (req, res) => {
 // =================================================================
 
 // GET Monopoly Leaderboard (Includes Virtual Hotels)
+const leaderboardCache = { data: null, ts: 0 };
 app.get('/api/monopoly/leaderboard', async (req, res) => {
   try {
+    if (leaderboardCache.data && Date.now() - leaderboardCache.ts < 30000) {
+      res.set('Cache-Control', 'public, max-age=30');
+      return res.json(leaderboardCache.data);
+    }
     const r = await pool.query(`
       SELECT p.member_id, p.name, p.country, p.city, p.subscription_tier, p.balance,
              (COUNT(DISTINCT prop.id) + COUNT(DISTINCT vho.id)) AS total_properties
@@ -348,12 +389,15 @@ app.get('/api/monopoly/leaderboard', async (req, res) => {
       GROUP BY p.member_id, p.name, p.country, p.city, p.subscription_tier, p.balance, p.email
       ORDER BY p.balance DESC LIMIT 50
     `);
+    leaderboardCache.data = r.rows;
+    leaderboardCache.ts = Date.now();
+    res.set('Cache-Control', 'public, max-age=30');
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST Credit Subscription (simulate subscribe, grant coin bonus)
-app.post('/api/monopoly/credit-subscription', async (req, res) => {
+app.post('/api/monopoly/credit-subscription', rateLimit(20), async (req, res) => {
   try {
     const { member_id, subscription_tier = 'basic_edu' } = req.body || {};
     if (!member_id) return res.status(400).json({ error: 'member_id wajib' });
@@ -394,7 +438,7 @@ app.post('/api/monopoly/credit-subscription', async (req, res) => {
 });
 
 // POST Roll Dice & Move
-app.post('/api/monopoly/roll-dice', async (req, res) => {
+app.post('/api/monopoly/roll-dice', rateLimit(30), async (req, res) => {
   try {
     const { member_id } = req.body || {};
     if (!member_id) return res.status(401).json({ error: 'Silakan Login SSO terlebih dahulu.' });
@@ -478,7 +522,7 @@ app.post('/api/monopoly/roll-dice', async (req, res) => {
 });
 
 // POST Buy Property
-app.post('/api/monopoly/buy-property', async (req, res) => {
+app.post('/api/monopoly/buy-property', rateLimit(30), async (req, res) => {
   try {
     const { member_id, property_id } = req.body || {};
     if (!member_id || !property_id) return res.status(400).json({ error: 'member_id dan property_id wajib' });
@@ -509,7 +553,7 @@ app.post('/api/monopoly/buy-property', async (req, res) => {
 });
 
 // POST Upgrade Property
-app.post('/api/monopoly/upgrade-property', async (req, res) => {
+app.post('/api/monopoly/upgrade-property', rateLimit(30), async (req, res) => {
   try {
     const { member_id, property_id } = req.body || {};
     if (!member_id || !property_id) return res.status(400).json({ error: 'member_id dan property_id wajib' });
@@ -540,7 +584,7 @@ app.post('/api/monopoly/upgrade-property', async (req, res) => {
 });
 
 // POST Answer Quiz
-app.post('/api/monopoly/answer-quiz', async (req, res) => {
+app.post('/api/monopoly/answer-quiz', rateLimit(30), async (req, res) => {
   try {
     const { member_id, quiz_id, selected_option } = req.body || {};
     if (!member_id || !quiz_id || typeof selected_option !== 'number') {
@@ -586,7 +630,7 @@ app.get('/api/monopoly/marketplace/listings', async (req, res) => {
 });
 
 // POST List Property on Marketplace
-app.post('/api/monopoly/marketplace/list-property', async (req, res) => {
+app.post('/api/monopoly/marketplace/list-property', rateLimit(30), async (req, res) => {
   try {
     const { member_id, property_id, asking_price } = req.body || {};
     if (!member_id || !property_id || !asking_price) return res.status(400).json({ error: 'member_id, property_id, asking_price wajib' });
@@ -611,7 +655,7 @@ app.post('/api/monopoly/marketplace/list-property', async (req, res) => {
 });
 
 // POST Buy Marketplace Listing
-app.post('/api/monopoly/marketplace/buy-listing', async (req, res) => {
+app.post('/api/monopoly/marketplace/buy-listing', rateLimit(30), async (req, res) => {
   try {
     const { member_id, listing_id } = req.body || {};
     if (!member_id || !listing_id) return res.status(400).json({ error: 'member_id dan listing_id wajib' });
@@ -922,8 +966,18 @@ app.get('/api/hotels/search', async (req, res) => {
     const params = [];
 
     if (country) {
-      params.push(`%${country.toLowerCase()}%`);
-      conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length} OR LOWER(COALESCE(cc2.name,'')) LIKE $${params.length})`);
+      const cSlug = String(country).toLowerCase();
+      const cLookup = await pool.query(
+        `SELECT name FROM countries WHERE LOWER(code) = $1 OR LOWER(slug) = $1 OR LOWER(name) = $1 LIMIT 1`,
+        [cSlug]
+      );
+      if (cLookup.rows.length) {
+        params.push(cLookup.rows[0].name.toLowerCase());
+        conditions.push(`LOWER(h.country) = $${params.length}`);
+      } else {
+        params.push(`%${country.toLowerCase()}%`);
+        conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length} OR LOWER(COALESCE(cc2.name,'')) LIKE $${params.length})`);
+      }
     } else if (city) {
       const q = city.toLowerCase();
       const islandRegions = ISLAND_REGIONS[q];
