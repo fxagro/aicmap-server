@@ -1322,19 +1322,19 @@ function generateTravelpayoutsPartnerLink(targetUrl, campaignId = '4115', subId 
   if (targetUrl.includes('trip.com') || campaignId === '5075') {
     if (cityIds.trip) {
       const tripCityId = cityIds.trip;
-      return `https://id.trip.com/hotels/list?city=${tripCityId}&cityName=${encodeURIComponent(cityName || 'Bandung')}&checkIn=${checkin}&checkOut=${checkout}&adult=${adults}&children=${children}&crn=${rooms}&searchType=CT&domestic=false&barCurr=IDR`;
+      return `https://id.trip.com/hotels/list?city=${tripCityId}&cityName=${encodeURIComponent(cityName || 'Bandung')}&checkIn=${checkin}&checkOut=${checkout}&adult=${adults}&children=${children}&crn=${rooms}&searchType=CT&domestic=false&barCurr=IDR&Allianceid=${marker}`;
     }
-    return `https://www.trip.com/hotels/list?keyword=${encodeURIComponent(cityName || hotelName)}&checkIn=${checkin}&checkOut=${checkout}&adult=${adults}&crn=${rooms}`;
+    return `https://www.trip.com/hotels/list?keyword=${encodeURIComponent(cityName || hotelName)}&checkIn=${checkin}&checkOut=${checkout}&adult=${adults}&crn=${rooms}&Allianceid=${marker}`;
   }
 
-  // Hotels.com: city search with destination + dates
+  // Hotels.com: city search with destination + dates, tracked via Travelpayouts
   if (targetUrl.includes('hotels.com') || campaignId === '2131') {
-    return `https://www.hotels.com/Hotel-Search?destination=${encodeURIComponent(cityName || hotelName)}&startDate=${checkin}&endDate=${checkout}&adults=${adults}&rooms=${rooms}&children=${children}`;
+    return `https://tp.media/r?marker=${marker}&p=2131&sub_id=${encodeURIComponent(subId)}&u=${encodeURIComponent(`https://www.hotels.com/Hotel-Search?destination=${encodeURIComponent(cityName || hotelName)}&startDate=${checkin}&endDate=${checkout}&adults=${adults}&rooms=${rooms}&children=${children}`)}`;
   }
 
-  // Expedia: city search with destination + dates
+  // Expedia: city search with destination + dates, tracked via Travelpayouts
   if (targetUrl.includes('expedia.com') || campaignId === '393') {
-    return `https://www.expedia.com/Hotel-Search?destination=${encodeURIComponent(cityName || hotelName)}&startDate=${checkin}&endDate=${checkout}&adults=${adults}&rooms=${rooms}&children=${children}`;
+    return `https://tp.media/r?marker=${marker}&p=393&sub_id=${encodeURIComponent(subId)}&u=${encodeURIComponent(`https://www.expedia.com/Hotel-Search?destination=${encodeURIComponent(cityName || hotelName)}&startDate=${checkin}&endDate=${checkout}&adults=${adults}&rooms=${rooms}&children=${children}`)}`;
   }
 
   // Kayak: hotel search with city + dates
@@ -1348,14 +1348,14 @@ function generateTravelpayoutsPartnerLink(targetUrl, campaignId = '4115', subId 
     const cityLower = (cityName || '').toLowerCase().trim();
     const kayakCode = kayakCodes[cityLower];
     if (kayakCode) {
-      return `https://www.kayak.com/hotels/${encodeURIComponent(cityName)}-${kayakCode}/${checkin}/${checkout}/${adults}adults`;
+      return `https://tp.media/r?marker=${marker}&p=5465&sub_id=${encodeURIComponent(subId)}&u=${encodeURIComponent(`https://www.kayak.com/hotels/${encodeURIComponent(cityName)}-${kayakCode}/${checkin}/${checkout}/${adults}adults`)}`;
     }
-    return `https://www.kayak.com/hotels/${encodeURIComponent(cityName || hotelName)}/${checkin}/${checkout}/${adults}adults`;
+    return `https://tp.media/r?marker=${marker}&p=5465&sub_id=${encodeURIComponent(subId)}&u=${encodeURIComponent(`https://www.kayak.com/hotels/${encodeURIComponent(cityName || hotelName)}/${checkin}/${checkout}/${adults}adults`)}`;
   }
 
-  // Klook: search result page
+  // Klook: search result page, tracked via Travelpayouts
   if (targetUrl.includes('klook.com') || campaignId === '12049') {
-    return `https://www.klook.com/search/result/?query=${encodeURIComponent(cityName || hotelName)}&search_scope=main_search`;
+    return `https://tp.media/r?marker=${marker}&p=12049&sub_id=${encodeURIComponent(subId)}&u=${encodeURIComponent(`https://www.klook.com/search/result/?query=${encodeURIComponent(cityName || hotelName)}&search_scope=main_search`)}`;
   }
 
   // Default: use Travelpayouts redirect

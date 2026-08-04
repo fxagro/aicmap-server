@@ -110,15 +110,17 @@ function partnerLinks(generatePartnerLink, hotel, citySlug) {
     : `https://www.agoda.com/search?text=${encodeURIComponent(name)}&cid=1893836&tag=${marker}`;
   // Booking/Trip/Traveloka/Expedia: deep-link ke nama hotel sering gagal resolve (redirect ke homepage);
   // pakai kota sebagai destinasi supaya selalu mendarat di halaman kota yang relevan.
+  // Expedia/Hotels.com/Kayak/Klook: gunakan redirect Travelpayouts (marker + campaign) supaya komisi ter-track.
+  const tp = (campaign, target) => `https://tp.media/r?marker=${marker}&p=${campaign}&sub_id=${encodeURIComponent(sub)}&u=${encodeURIComponent(target)}`;
   return {
     agoda,
     booking: `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(cityName)}&aid=${marker}`,
     trip: `https://www.trip.com/hotels/list?keyword=${encodeURIComponent(cityName)}&Allianceid=${marker}`,
     traveloka: `https://www.traveloka.com/en-id/hotel/search?spec=${encodeURIComponent(cityName)}&marker=${marker}`,
-    expedia: `https://www.expedia.com/Hotel-Search?destination=${encodeURIComponent(cityName)}`,
-    hotelscom: `https://www.hotels.com/Hotel-Search?destination=${encodeURIComponent(cityName)}`,
-    kayak: `https://www.kayak.com/hotels/${encodeURIComponent(cityName)}/2026-08-10/2026-08-11/2adults`,
-    klook: `https://www.klook.com/search/result/?query=${encodeURIComponent(cityName)}&search_scope=main_search`,
+    expedia: tp('393', `https://www.expedia.com/Hotel-Search?destination=${encodeURIComponent(cityName)}`),
+    hotelscom: tp('2131', `https://www.hotels.com/Hotel-Search?destination=${encodeURIComponent(cityName)}`),
+    kayak: tp('5465', `https://www.kayak.com/hotels/${encodeURIComponent(cityName)}/2026-08-10/2026-08-11/2adults`),
+    klook: tp('12049', `https://www.klook.com/search/result/?query=${encodeURIComponent(cityName)}&search_scope=main_search`),
   };
 }
 
