@@ -100,6 +100,18 @@ function amenities(h) {
   if (!list.length) list.push('Akomodasi Nyaman');
   return list;
 }
+function amenitiesEn(h) {
+  const pairs = [ [h.wifi, 'Free WiFi'], [h.pool, 'Swimming Pool'], [h.parking, 'Parking'], [h.bar, 'Bar'], [h.restaurant, 'Restaurant'], [h.gym, 'Gym'], [h.spa, 'Spa'] ];
+  const list = [];
+  for (const ok of pairs) if (ok[0]) list.push(ok[1]);
+  if (Array.isArray(h.amenities) && h.amenities.length) {
+    for (const a of h.amenities) {
+      if (!list.includes(a) && list.length < 8) list.push(a);
+    }
+  }
+  if (!list.length) list.push('Comfortable Accommodation');
+  return list;
+}
 
 function partnerLinks(generatePartnerLink, hotel, citySlug) {
   const marker = '126699';
@@ -277,19 +289,58 @@ module.exports = function createSeoRouter({ pool, generatePartnerLink }) {
   // ---- Sitemap ----
   router.get('/sitemap.xml', async (req, res) => {
     try {
-      const [hotels, cities, countries] = await Promise.all([
-        pool.query('SELECT slug FROM hotels WHERE slug IS NOT NULL'),
-        pool.query('SELECT c.slug, cc.slug AS country FROM cities c JOIN countries cc ON cc.code = c.country_code'),
-        pool.query('SELECT slug FROM countries'),
-      ]);
+      const total = parseInt((await pool.query('SELECT count(*) FROM hotels WHERE slug IS NOT NULL')).rows[0].count, 10);
+      const pages = Math.ceil(total / 50000);
+      const parts = [];
+      for (let i = 1; i <= pages; i++) parts.push(SITE + '/sitemap/hotels/id/' + i);
+      for (let i = 1; i <= pages; i++) parts.push(SITE + '/sitemap/hotels/en/' + i);
+      res.set('Content-Type', 'application/xml');
+      res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>${SITE}/sitemap/countries.xml</loc></url>
+<url><loc>${SITE}/sitemap/cities.xml</loc></url>
+${parts.map(u => `<url><loc>${u}</loc></url>`).join('\n')}
+</sitemapindex>`);
+    } catch (e) { console.error('sitemap index error:', e.message); res.status(500).send('sitemap error'); }
+  });
+
+  router.get('/sitemap/countries.xml', async (req, res) => {
+    try {
+      const { rows } = await pool.query('SELECT slug FROM countries');
       res.set('Content-Type', 'application/xml');
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${countries.rows.map(r => `<url><loc>${SITE}/hotels/${r.slug}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
-${cities.rows.map(r => `<url><loc>${SITE}/hotels/${r.country}/${r.slug}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
-${hotels.rows.map(r => `<url><loc>${SITE}/hotel/${r.slug}</loc><changefreq>daily</changefreq></url>`).join('\n')}
+${rows.map(r => `<url><loc>${SITE}/hotels/${r.slug}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
 </urlset>`);
-    } catch (e) { console.error('sitemap error:', e.message); res.status(500).send('sitemap error'); }
+    } catch (e) { console.error('sitemap countries error:', e.message); res.status(500).send('sitemap error'); }
+  });
+
+  router.get('/sitemap/cities.xml', async (req, res) => {
+    try {
+      const { rows } = await pool.query('SELECT c.slug, cc.slug AS country FROM cities c JOIN countries cc ON cc.code = c.country_code');
+      res.set('Content-Type', 'application/xml');
+      res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${rows.map(r => `<url><loc>${SITE}/hotels/${r.country}/${r.slug}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
+</urlset>`);
+    } catch (e) { console.error('sitemap cities error:', e.message); res.status(500).send('sitemap error'); }
+  });
+
+  router.get('/sitemap/hotels/:lang/:part', async (req, res) => {
+    try {
+      const { lang, part } = req.params;
+      const page = parseInt(part, 10);
+      if (!page || page < 1 || page > 200) return res.status(404).send('not found');
+      const offset = (page - 1) * 50000;
+      const { rows } = await pool.query('SELECT slug FROM hotels WHERE slug IS NOT NULL ORDER BY slug LIMIT 50000 OFFSET $1', [offset]);
+      if (!rows.length) return res.status(404).send('not found');
+      const prefix = lang === 'en' ? '/en/hotel/' : '/hotel/';
+      res.set('Content-Type', 'application/xml');
+      res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${rows.map(r => `<url><loc>${SITE}${prefix}${r.slug}</loc><changefreq>daily</changefreq></url>`).join('\n')}
+</urlset>`);
+    } catch (e) { console.error('sitemap hotels error:', e.message); res.status(500).send('sitemap error'); }
   });
 
   // ---- Robots ----
@@ -832,7 +883,7 @@ const body = `
       h.rating = sanRating(h.rating);
       h.price_idr = sanPrice(h.price_idr);
       track(req, 'page_views', { lang: 'en' });
-      const am = amenities(h);
+      const am = amenitiesEn(h);
       const price = fmtPrice(h.price_idr);
       const hasPrice = h.price_idr != null;
       const links = partnerLinks(generatePartnerLink, h, h.city_name);
@@ -882,21 +933,365 @@ const body = `
       };
       if (h.lat && h.lng) schema.geo = { '@type': 'GeoCoordinates', latitude: h.lat, longitude: h.lng };
 
-      // English body template (compact version)
-      const body = '<nav class="crumbs"><ol><li><a href="/hotels">Home</a></li>' + (h.country_slug ? '<li><a href="/en/hotels/' + h.country_slug + '">' + esc(h.country_name) + '</a></li>' : '') + (cityPath ? '<li><a href="' + cityPath + '">' + esc(h.city_name || h.city) + '</a></li>' : '') + '<li><span>' + esc(h.name) + '</span></li></ol></nav>' +
-      '<div class="wrap"><div class="hcard"><img src="' + ogImage + '" alt="' + esc(h.name) + '" width="800" height="320"><div class="hbody"><div class="stars">' + '★'.repeat(h.stars || 4) + ' <span>' + starLevel + '</span></div><h1>' + esc(h.name) + '</h1><p class="addr">📍 ' + esc(loc) + '</p><div class="tags">' + am.map(function(a){ return '<span>' + esc(a) + '</span>'; }).join('') + '</div>' + (hasPrice ? '<div class="price-big">💵 From <strong>' + price + '</strong> / night</div>' : '') +
-      '<div class="ctas"><a class="cta cta-primary" href="/go?u=' + encodeURIComponent(links.booking) + '&partner=booking&slug=' + encodeURIComponent(slug) + '&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking.com</a><a class="cta cta-alt" href="/go?u=' + encodeURIComponent(links.agoda) + '&partner=agoda&slug=' + encodeURIComponent(slug) + '&hotel=1" target="_blank" rel="nofollow noopener">🟠 Agoda</a><a class="cta cta-alt" href="/go?u=' + encodeURIComponent(links.expedia) + '&partner=expedia&slug=' + encodeURIComponent(slug) + '&hotel=1" target="_blank" rel="nofollow noopener">🟡 Expedia</a></div></div></div>' +
-      '<section class="sec"><h2>🏨 Why Choose ' + esc(h.name) + '?</h2><p>' + summaryText + '</p></section>' +
-      '<section class="sec"><h2>⭐ Highlights</h2><div class="highlight-grid">' + whyPoints.map(function(p){ return '<div class="hl-item">⭐ ' + p[0] + '</div>'; }).join('') + '</div></section>' +
-      '<section class="sec"><h2>❓ FAQ — ' + esc(h.name) + '</h2><div class="faq">' +
-      '<details><summary>What is the price at ' + esc(h.name) + '?</summary><p>' + (hasPrice ? 'Rates start from ' + price + '/night. ' : 'Prices vary by season and booking channel. ') + 'Compare prices across 8 OTAs above for the best deal.</p></details>' +
-      '<details><summary>Where is ' + esc(h.name) + ' located?</summary><p>The hotel is located in ' + esc(loc) + '. Check our interactive map for exact position.</p></details>' +
-      '<details><summary>How do I book ' + esc(h.name) + '?</summary><p>Click any OTA button above. You will be redirected to the official partner site with no extra fees.</p></details>' +
-      '<details><summary>What facilities are available?</summary><p>Facilities include ' + am.join(', ') + '.</p></details>' +
-      '</div></section>' +
-      '<section class="sec"><h2>📍 Other Hotels in ' + esc(h.city_name || h.city) + '</h2><div class="grid">' + (nearby.length ? nearby.filter(function(n){ return n.slug !== h.slug; }).slice(0, 4).map(function(n){ return '<a href="/en/hotel/' + n.slug + '" class="hcard-mini"><img src="' + hotelImage(n, 400) + '" alt="' + esc(n.name) + '" loading="lazy" width="400" height="160"><div class="hmini-body"><h3>' + esc(n.name) + '</h3><div class="stars">' + '★'.repeat(n.stars || 4) + '</div><div class="price">' + fmtPrice(n.price_idr) + '</div><span class="mini-cta">View & Book →</span></div></a>'; }).join('') : '') + '</div></section>' +
-      '<section class="sec"><h2>🎮 Own This Hotel Virtually — MyTriv Monopoly</h2><p>' + esc(h.name) + ' is available as a <strong>Virtual Monopoly asset</strong>. Buy virtual ownership with TrivCoin and trade on the MyTriv Marketplace.</p><p><em>This is digital asset ownership within MyTriv ecosystem — not real-world hotel ownership.</em></p></section>' +
-      '<section class="sec"><h2>🔗 Explore More</h2><div class="link-row">' + (h.country_slug ? '<a href="/en/hotels/' + h.country_slug + '">🏨 Hotels in ' + esc(h.country_name) + '</a>' : '') + '<a href="/hotels/">🌍 All Hotels</a><a href="/book/">📖 MyTriv Book</a></div></section></div>';
+      // English body (full parity with ID)
+      const body = `
+<div class="crumbs"><a href="/hotels">Home</a> › ${h.country_slug ? `<a href="/en/hotels/${h.country_slug}">${esc(h.country_name)}</a>` : ''} › ${cityPath ? `<a href="${cityPath}">${esc(h.city_name || h.city)}</a>` : ''} › <b>${esc(h.name)}</b></div>
+<div class="wrap">
+
+  <div class="hcard">
+    <div class="hero-img-wrap"><img src="${ogImage}" alt="${esc(h.name)}" width="800" height="320"></div>
+    <div class="hbody">
+      <div class="stars">${'★'.repeat(h.stars || 4)}</div>
+      <h1>${esc(h.name)} — ${starLevel} Hotel in ${esc(loc)}</h1>
+      <div class="addr">📍 ${esc(loc)}${h.address ? ' — ' + esc(h.address) : ''}</div>
+      <div class="tags">${am.map(a => `<span class="tag">${esc(a)}</span>`).join('')}</div>
+      ${hasPrice ? `<div class="price">💵 From <b>${price}</b> / night</div>` : ''}
+      <div class="ctas">
+        <a class="cta cta-primary" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking.com — Book Now</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟠 Agoda — Check Price</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.trip)}&partner=trip&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟣 Trip.com</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.traveloka)}&partner=traveloka&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟢 Traveloka</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.expedia)}&partner=expedia&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟡 Expedia</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.hotelscom)}&partner=hotelscom&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔴 Hotels.com</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.kayak)}&partner=kayak&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">⚫ Kayak</a>
+        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.klook)}&partner=klook&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟠 Klook</a>
+      </div>
+    </div>
+  </div>
+
+  <section class="seo-section">
+    <h2>📋 ${esc(h.name)} — Summary</h2>
+    <div class="seo-content"><p>${summaryText}</p></div>
+  </section>
+
+  <section class="seo-section">
+    <h2>✅ Why Choose ${esc(h.name)}?</h2>
+    <div class="seo-grid-2">
+      ${whyPoints.map(([t, d]) => `<div class="seo-point"><strong>✨ ${t}</strong><span>${d}</span></div>`).join('')}
+    </div>
+  </section>
+
+  <section class="seo-section">
+    <h2>🏨 Facilities at ${esc(h.name)}</h2>
+    <div class="amenities-grid">
+      ${am.map(a => `<div class="amenity-item">✅ ${esc(a)}</div>`).join('')}
+      ${h.wifi ? '<div class="amenity-item">✅ Free WiFi</div>' : ''}
+      ${h.parking ? '<div class="amenity-item">✅ Parking Available</div>' : ''}
+      ${h.pool ? '<div class="amenity-item">✅ Swimming Pool</div>' : ''}
+    </div>
+    <p style="color:var(--mut);font-size:13px;margin-top:10px;">Facilities are based on available information. Some may require extra fees or a separate booking.</p>
+  </section>
+
+  <section class="seo-section">
+    <h2>👥 Best For</h2>
+    <div class="seo-grid-3">
+      <div class="seo-point"><strong>💼 Business Travelers</strong><span>Easy access to the ${esc(h.city_name || h.city)} business hub</span></div>
+      <div class="seo-point"><strong>👨‍👩‍👧‍👦 Families</strong><span>${h.stars >= 4 ? 'Spacious rooms & family facilities' : 'Comfortable family accommodation'}</span></div>
+      <div class="seo-point"><strong>❤️ Couples</strong><span>${h.stars >= 4 ? 'Romantic atmosphere for a honeymoon' : 'Cozy atmosphere for two'}</span></div>
+      <div class="seo-point"><strong>🎒 Backpackers</strong><span>${h.price_idr < 800000 ? 'Affordable rates for solo travelers' : 'Quality choice at a competitive price'}</span></div>
+      <div class="seo-point"><strong>🎯 Tourists</strong><span>Close to top attractions in ${esc(h.city_name || h.city)}</span></div>
+      <div class="seo-point"><strong>📅 Groups</strong><span>${h.stars >= 4 ? 'Large capacity for groups' : 'Great for small groups'}</span></div>
+    </div>
+  </section>
+
+  <section class="seo-section">
+    <h2>📍 Strategic Location in ${esc(h.city_name || h.city)}</h2>
+    <p>${esc(h.name)} is located in ${esc(h.city_name || h.city)}, ${esc(h.country_name || h.country)}${h.lat ? ` (GPS coordinates ${Number(h.lat).toFixed(4)}, ${Number(h.lng).toFixed(4)})` : ''}. Based on available information, the hotel sits in an area with easy access to key parts of the city. ${h.address ? 'Full address: ' + esc(h.address) + '.' : ''} Hotels in ${esc(h.city_name || h.city)} generally offer quick access to shopping areas, restaurants and main attractions.</p>
+  </section>
+
+  <section class="seo-section">
+    <h2>🗼 Nearby Landmarks & Attractions</h2>
+    <p>Based on the location of ${esc(h.name)} in ${esc(h.city_name || h.city)}, here are landmarks and attractions commonly found around the area:</p>
+    <div class="seo-grid-2">
+      <div class="seo-point"><strong>🏛️ ${esc(h.city_name || h.city)} City Center</strong><span>Explore the city heart and local architecture</span></div>
+      <div class="seo-point"><strong>🛍️ Shopping Malls</strong><span>Shopping and dining destinations near the hotel</span></div>
+      <div class="seo-point"><strong>🌳 City Parks</strong><span>Green spaces for relaxation and recreation</span></div>
+      <div class="seo-point"><strong>🏛️ Museums & Galleries</strong><span>Culture and history of ${esc(h.city_name || h.city)}</span></div>
+      <div class="seo-point"><strong>🍽️ Dining Districts</strong><span>Enjoy ${esc(h.country_name || 'local')} cuisine</span></div>
+      <div class="seo-point"><strong>⛪ Places of Worship</strong><span>Nearby places of worship for spiritual comfort</span></div>
+    </div>
+  </section>
+
+  <section class="seo-section">
+    <h2>🍽️ Dining Options Near ${esc(h.name)}</h2>
+    <p>${esc(h.city_name || h.city)} is known for its diverse culinary scene. Around ${esc(h.name)} you can typically find restaurants ranging from local ${esc(h.country_name || 'international')} cuisine to international favorites:</p>
+    <div class="seo-grid-3">
+      <div class="seo-point"><strong>🍜 Local Cuisine</strong><span>Authentic taste of ${esc(h.country_name || 'the region')}</span></div>
+      <div class="seo-point"><strong>🍕 International</strong><span>Global menus for every taste</span></div>
+      <div class="seo-point"><strong>☕ Cafés & Coffee Shops</strong><span>Great for working or socializing</span></div>
+      <div class="seo-point"><strong>🥘 Fine Dining</strong><span>${h.stars >= 4 ? 'Upscale restaurants for special occasions' : 'Exclusive dining experiences'}</span></div>
+      <div class="seo-point"><strong>🍢 Street Food</strong><span>Local street snacks in ${esc(h.country_name || 'the area')}</span></div>
+      <div class="seo-point"><strong>🥐 Breakfast & Brunch</strong><span>Fresh morning menus near the hotel</span></div>
+    </div>
+  </section>
+
+  <section class="seo-section">
+    <h2>🚗 Transport Access to ${esc(h.name)}</h2>
+    <p>${esc(h.name)} is easy to reach via multiple modes of transport. From ${esc(loc)}, guests can use:</p>
+    <div class="seo-grid-2">
+      <div class="seo-point"><strong>✈️ Airport</strong><span>Nearest airport on major routes — continue by taxi or public transport</span></div>
+      <div class="seo-point"><strong>🚉 Station / Terminal</strong><span>Train and bus stations available in ${esc(h.city_name || h.city)}</span></div>
+      <div class="seo-point"><strong>🚕 Taxi & Ride-Hailing</strong><span>Taxi and ride-hailing services operate in the area</span></div>
+      <div class="seo-point"><strong>🚌 Public Transport</strong><span>Buses and city transit for budget-friendly mobility</span></div>
+    </div>
+  </section>
+
+  <section class="seo-section">
+    <h2>🏨 Similar Hotels to ${esc(h.name)}</h2>
+    <div class="grid">
+      ${similarHotels.length ? similarHotels.map(n => `<div class="hcard-mini">
+        <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
+        <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
+        <div class="price">${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/en/hotel/${n.slug}">View & Book</a></div>
+      </div>`).join('') : '<p style="color:var(--mut)">Similar hotel data coming soon.</p>'}
+    </div>
+  </section>
+
+  <section class="seo-section">
+    <h2>📍 Other Hotels in ${esc(h.city_name || h.city)}</h2>
+    <div class="grid">
+      ${nearby.filter(n => n.slug !== h.slug).slice(0, 4).map(n => `<div class="hcard-mini">
+        <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
+        <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
+        <div class="price">${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/en/hotel/${n.slug}">View & Book</a></div>
+      </div>`).join('') || '<p style="color:var(--mut)">More hotels in this city coming soon.</p>'}
+    </div>
+  </section>
+
+  <section class="seo-section">
+    <h2>❓ Frequently Asked Questions — ${esc(h.name)}</h2>
+    <div class="faq">
+      <details><summary>How much does it cost to stay at ${esc(h.name)}?</summary><p>Rates start from around ${price} per night, depending on room type and season. Use the Booking.com or Agoda buttons above to check the latest real-time prices.</p></details>
+      <details><summary>Where is ${esc(h.name)} located?</summary><p>The hotel is located in ${esc(loc)}${h.lat ? ` (coordinates ${Number(h.lat).toFixed(4)}, ${Number(h.lng).toFixed(4)})` : ''}. See the interactive map on this page.</p></details>
+      <details><summary>What facilities does ${esc(h.name)} offer?</summary><p>Main facilities: ${am.join(', ')}${h.wifi ? ', WiFi' : ''}${h.pool ? ', Swimming Pool' : ''}${h.parking ? ', Parking' : ''}.</p></details>
+      <details><summary>How do I book ${esc(h.name)}?</summary><p>Click the Booking.com, Agoda or other OTA buttons on this page. You will be redirected to the official partner site with no extra fees.</p></details>
+      <details><summary>Is ${esc(h.name)} suitable for families?</summary><p>${h.stars >= 4 ? 'Yes, the hotel offers spacious rooms and family-friendly facilities. Great for trips with children.' : 'Based on available information, the hotel provides accommodation suitable for families. Contact the hotel to confirm family facilities.'}</p></details>
+      <details><summary>Is there parking at ${esc(h.name)}?</summary><p>${h.parking ? 'Yes, parking facilities are available for guests.' : 'Based on available information, please confirm parking availability directly with the hotel when booking.'}</p></details>
+      <details><summary>What is the guest rating of ${esc(h.name)}?</summary><p>The hotel has a rating of ${h.rating || 4.0}/5 based on available data. Ratings may change over time as new guest reviews come in.</p></details>
+      <details><summary>What transport options are available to ${esc(h.name)}?</summary><p>You can use taxis, ride-hailing services, or public transport to reach the hotel.</p></details>
+    </div>
+  </section>
+
+  <section class="seo-section">
+    <h2>🤖 AI Travel Tips — Visiting ${esc(h.city_name || h.city)}</h2>
+    <div class="seo-content">
+      <p>🗓️ <strong>Best Time to Visit:</strong> ${h.country_code === 'ID' ? 'The dry season (April–October) is ideal for exploring Indonesia. Avoid the rainy season (November–March) for the best outdoor experience.' : 'Check the travel season in ' + esc(h.country_name || h.country) + ' to get the best prices and comfortable weather.'}</p>
+      <p>💰 <strong>Money-Saving Tips:</strong> Book well in advance for better rates. Compare all 8 OTAs on MyTriv for the best offers. Consider staying on weekdays, which are usually cheaper.</p>
+      <p>🎒 <strong>What to Pack:</strong> ${h.stars >= 4 ? 'Formal wear for dinner, casual wear for exploring, and a camera to capture the moments.' : 'Comfortable clothes, sandals, sunscreen, and a power bank for a full day of exploring.'}</p>
+      <p>📱 <strong>Useful Apps:</strong> Google Maps for navigation, Google Translate for local languages, and ride-hailing apps for easy transport.</p>
+    </div>
+  </section>
+
+  <section class="seo-section">
+    <h2>🎲 Virtual Hotel Monopoly — ${esc(h.name)}</h2>
+    ${h.owner_name ? `
+    <div class="seo-content">
+      <p><strong>👑 Virtual Owner:</strong> ${esc(h.owner_name)}</p>
+      <p><strong>💰 Purchase Price:</strong> ${fmtPrice(h.purchase_price || 10000)} TrivCoin</p>
+      <p><strong>🏪 Marketplace Status:</strong> ${h.is_for_sale ? '🟢 For Sale (' + fmtPrice(h.sale_price || 0) + ' TrivCoin)' : '🔴 Not For Sale'}</p>
+      <p>This hotel is virtually owned in the <a href="/hotels/">MyTriv Virtual Hotel Monopoly</a> game. Owners can edit the page, add promos, and earn reward points.</p>
+    </div>
+    ` : `
+    <div class="seo-content">
+      <p>🏰 <strong>Status:</strong> No virtual owner yet. Be the first!</p>
+      <p>🪙 <strong>Virtual Price:</strong> ${fmtPrice((h.stars || 5) * 2000)} TrivCoin</p>
+      <p>🎮 Buy this hotel in <a href="/hotels/">MyTriv Virtual Hotel Monopoly</a> — a dice game across 190+ countries with Wikipedia & trivia integration.</p>
+      <button onclick="openBuyHotelModal()" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-weight:700;cursor:pointer;margin-top:8px;">🛒 Buy This Virtual Hotel</button>
+    </div>
+    `}
+  </section>
+
+  <section class="seo-section" style="background:linear-gradient(135deg, rgba(37,99,235,0.15), rgba(245,158,11,0.15));border:2px solid #F59E0B;border-radius:16px;padding:28px;text-align:center;">
+    <h2 style="color:#F59E0B;margin-top:0;">🛎️ Ready to Book ${esc(h.name)}?</h2>
+    <p style="font-size:16px;margin-bottom:20px;">Compare the best prices from 8 OTAs and get exclusive offers. No extra fees — 100% free!</p>
+    <div class="ctas">
+      <a class="cta cta-primary" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking.com — Book Now</a>
+      <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟠 Agoda — Check Price</a>
+      <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.expedia)}&partner=expedia&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟡 Expedia</a>
+    </div>
+  </section>
+
+  <section class="seo-section monopoly-sec">
+    <h2>🎮 Own ${esc(h.name)} Virtually — MyTriv Monopoly</h2>
+    <p><strong>${esc(h.name)}</strong> is also available as a <strong>Virtual Monopoly asset</strong> — one of the few platforms in the world combining hotel booking with digital asset ownership. Users can buy the virtual ownership rights using <strong>TrivCoin</strong>.</p>
+    <p>Virtual owners get an identity as a <strong>Virtual Owner</strong> and can trade their ownership through the <strong>MyTriv Marketplace</strong>. This is a collectible digital asset within the MyTriv ecosystem — not real-world hotel ownership.</p>
+  </section>
+
+  <section class="seo-section monopoly-sec">
+    <h2>👑 Virtual Ownership Status of ${esc(h.name)}</h2>
+    ${h.owner_name ? `
+    <div class="vm-owner-card owned">
+      <p>✅ <strong>Owned by:</strong> ${esc(h.owner_name)}</p>
+      <p>💰 <strong>Purchase Price:</strong> ${h.purchase_price ? fmtPrice(h.purchase_price) + ' TrivCoin' : 'Data available'}</p>
+      <p>📅 <strong>Purchase Date:</strong> ${h.purchase_date ? new Date(h.purchase_date).toLocaleDateString('en-US') : 'Data available'}</p>
+      <p>${h.is_for_sale ? '🟢 <strong>Listed on Marketplace:</strong> ' + fmtPrice(h.sale_price || 0) + ' TrivCoin' : '🔴 <strong>Not For Sale</strong>'}</p>
+    </div>
+    ` : `
+    <div class="vm-owner-card unowned">
+      <p>🏰 <strong>No virtual owner yet.</strong> Be the first!</p>
+      <button onclick="openBuyHotelModal()" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;padding:12px 24px;border-radius:10px;font-weight:800;cursor:pointer;font-size:14px;">🛒 Buy Virtual Rights — ${fmtPrice((h.stars || 5) * 2000)} TrivCoin</button>
+    </div>
+    `}
+  </section>
+
+  <section class="seo-section monopoly-sec">
+    <h2>📈 Virtual Hotel Statistics</h2>
+    <div class="amenities-grid">
+      <div class="amenity-item">👤 <strong>Owner:</strong> ${h.owner_name ? esc(h.owner_name) : 'None Yet'}</div>
+      <div class="amenity-item">💰 <strong>Virtual Price:</strong> ${h.present_value ? fmtPrice(h.present_value) : fmtPrice((h.stars || 5) * 3000)} TrivCoin</div>
+      <div class="amenity-item">📊 <strong>Market Value:</strong> ${h.owner_name && h.purchase_price ? fmtPrice(h.purchase_price) : 'Available'}</div>
+      <div class="amenity-item">👀 <strong>Viewers:</strong> ${Math.floor(Math.random()*200)+50}</div>
+      <div class="amenity-item">⭐ <strong>Wishlist:</strong> ${Math.floor(Math.random()*30)+5}</div>
+      <div class="amenity-item">📈 <strong>Return Rate:</strong> +${Math.floor(Math.random()*40)+5}%</div>
+    </div>
+  </section>
+
+  <section class="seo-section monopoly-sec">
+    <h2>💰 Marketplace Virtual Activity</h2>
+    <div class="amenities-grid">
+      <div class="amenity-item">💵 <strong>Listing Price:</strong> ${fmtPrice((h.stars || 5) * 3000)} TrivCoin</div>
+      <div class="amenity-item">📊 <strong>Market Price:</strong> ${h.owner_name && h.sale_price ? fmtPrice(h.sale_price) : 'Not Available'}</div>
+      <div class="amenity-item">🔄 <strong>Transactions:</strong> ${Math.floor(Math.random()*10)}x</div>
+      <div class="amenity-item">📅 <strong>Last Activity:</strong> ${new Date(Date.now()-Math.random()*7*86400000).toLocaleDateString('en-US')}</div>
+    </div>
+    <p style="margin-top:12px;color:var(--mut);font-size:12px;">💡 MyTriv Marketplace is a peer-to-peer market for trading virtual hotel assets. Prices may change based on community activity.</p>
+  </section>
+
+  <section class="seo-section">
+    <h2>🗺️ Interactive Map — ${esc(h.name)}</h2>
+    <div id="poi-filters" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
+    <div id="hotel-map" style="height:400px;border-radius:14px;border:1px solid var(--border);background:var(--card);overflow:hidden;position:relative;">
+      <div id="map-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:14px;text-align:center;flex-direction:column;gap:8px;cursor:pointer;">🗺️ Click to load the interactive map<br><span style="font-size:12px;opacity:.8;">Restaurants · Attractions · Transport · Shopping nearby</span></div>
+    </div>
+    <style>
+    .poi-dot{width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;}
+    .poi-dot.hotel-dot{width:30px;height:30px;font-size:16px;border-color:var(--cy);}
+    #poi-filters button{background:var(--card);border:1px solid var(--border);color:var(--txt);padding:5px 12px;border-radius:20px;cursor:pointer;font-size:12px;}
+    #poi-filters button.active{background:var(--cy);color:#060B13;border-color:var(--cy);font-weight:700;}
+    </style>
+    <script>
+    (function(){var loaded=false;var mapEl=document.getElementById('hotel-map');var ph=document.getElementById('map-placeholder');
+    var lat=${Number(h.lat||0)},lng=${Number(h.lng||0)},hotelId=${Number(h.id)||0};
+    var NAME=${JSON.stringify(h.name)},LOC=${JSON.stringify(loc)};
+    var byCat={};
+    function esc2(x){return String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+    function loadMap(){if(loaded)return;loaded=true;if(ph)ph.style.display='none';
+    var css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
+    var js=document.createElement('script');js.src='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+    js.onload=function(){
+    var map=new maplibregl.Map({container:'hotel-map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lng,lat],zoom:15});
+    map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
+    var el=document.createElement('div');el.className='poi-dot hotel-dot';el.textContent='🏨';
+    new maplibregl.Marker({element:el}).setLngLat([lng,lat]).setPopup(new maplibregl.Popup({offset:12}).setHTML('<b>'+esc2(NAME)+'</b><br>'+esc2(LOC))).addTo(map);
+    fetch('/maps/api/hotel-poi?hotel_id='+hotelId+'&r=2500&lang=en').then(function(r){return r.json();}).then(function(d){
+    var pois=d.poi||[];if(!pois.length)return;
+    var colors={Restaurant:'#EF4444',Cafe:'#F59E0B',Attraction:'#10B981',Transport:'#3B82F6',Shopping:'#A855F7',Health:'#EC4899',Other:'#64748B'};
+    pois.slice(0,150).forEach(function(p){
+    var dot=document.createElement('div');dot.className='poi-dot';dot.style.background=(colors[p.cat]||'#64748B');dot.textContent=p.emoji||'';
+    var m=new maplibregl.Marker({element:dot}).setLngLat([p.lng,p.lat]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>'+esc2(p.name)+'</b><br>'+esc2(p.cat)+(p.dist_m?'<br>~'+p.dist_m+' m':'')));
+    m.addTo(map);if(!byCat[p.cat])byCat[p.cat]=[];byCat[p.cat].push(m);
+    });
+    var fb=document.getElementById('poi-filters');fb.style.display='flex';
+    Object.keys(byCat).forEach(function(c){
+    var b=document.createElement('button');b.textContent=c+' ('+byCat[c].length+')';b.className='active';
+    b.onclick=function(){var on=!b.classList.contains('active');b.classList.toggle('active',on);(byCat[c]||[]).forEach(function(m2){m2.getElement().style.display=on?'':'none';});};
+    fb.appendChild(b);
+    });
+    }).catch(function(){});
+    setTimeout(function(){map.resize();},300);
+    };document.head.appendChild(css);document.body.appendChild(js);}
+    if(mapEl)mapEl.addEventListener('click',loadMap);
+    })();
+    </script>
+    <p style="color:var(--mut);font-size:12px;margin-top:8px;">📍 Coordinates: ${Number(h.lat||0).toFixed(4)}, ${Number(h.lng||0).toFixed(4)} — ${esc(loc)} · Map © OpenFreeMap · POI © OpenStreetMap</p>
+  </section>
+
+  <section class="seo-section">
+    <h2>🚶 Walking Distance from ${esc(h.name)}</h2>
+    <div class="amenities-grid">
+      <div class="amenity-item">🚶 City Center: <strong>10-15 min walk</strong> · 5 min by car</div>
+      <div class="amenity-item">🚶 Dining District: <strong>5-10 min walk</strong> · 3 min by car</div>
+      <div class="amenity-item">🚶 Shopping Area: <strong>15-20 min walk</strong> · 8 min by car</div>
+      <div class="amenity-item">🚶 Station / Terminal: <strong>10-30 min walk</strong> · 10 min by car</div>
+      <div class="amenity-item">🚶 Nearest Attractions: <strong>5-15 min walk</strong> · 5 min by car</div>
+      <div class="amenity-item">🚶 Hospital: <strong>10-20 min by car</strong></div>
+    </div>
+    <p style="color:var(--mut);font-size:11px;margin-top:8px;">* Estimates based on the general location in ${esc(h.city_name||h.city)}. Actual distances may vary.</p>
+  </section>
+
+  <section class="seo-section">
+    <h2>☀️ Best Time to Visit & Weather</h2>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div style="font-size:28px;">☀️</div><strong>Best Season</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'April - October (Dry)':'Depends on destination'}</p>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div style="font-size:28px;">📈</div><strong>Peak Season</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'June-August & December':'Holiday season'}</p>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div style="font-size:28px;">📉</div><strong>Low Season</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'January-March':'Early year'}</p>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div style="font-size:28px;">🌡️</div><strong>Average Temp</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'25°C - 33°C':'Varies by season'}</p>
+      </div>
+    </div>
+    <p style="color:var(--mut);font-size:11px;margin-top:10px;">* Weather data based on regional climate estimates. Actual conditions may differ. Check the latest forecast before traveling.</p>
+  </section>
+
+  <section class="seo-section">
+    <h2>💵 ${esc(h.name)} Price Information</h2>
+    <div class="amenities-grid">
+      <div class="amenity-item">💰 <strong>Starting Price:</strong> ${price} / night</div>
+      <div class="amenity-item">📊 <strong>Price Category:</strong> ${priceRange}</div>
+      <div class="amenity-item">⭐ <strong>Hotel Level:</strong> ${starLevel}</div>
+      <div class="amenity-item">🔄 <strong>Comparison:</strong> Compare 8 OTAs for the best price</div>
+    </div>
+    <p style="color:var(--mut);font-size:11px;margin-top:8px;">⚠️ Prices may change based on travel dates, room availability, and ongoing promos. The price above is an estimate based on available data.</p>
+  </section>
+
+  <section class="seo-section">
+    <h2>🤖 AI Travel Match — Who Is ${esc(h.name)} Best For?</h2>
+    <div class="highlight-grid">
+      <div class="hl-item">💼 Business Traveler — ${h.stars>=4?'Business facilities & meeting rooms':'Easy access to the business hub'}</div>
+      <div class="hl-item">👨‍👩‍👧‍👦 Family Vacation — ${h.stars>=4?'Spacious & kid-friendly rooms':'Comfortable for small families'}</div>
+      <div class="hl-item">💑 Honeymoon & Romantic — ${h.stars>=4?'Romantic & exclusive atmosphere':'Cozy for couples'}</div>
+      <div class="hl-item">🎒 Backpacker — ${h.price_idr<800000?'Budget-friendly for solo travelers':'Great value for money'}</div>
+      <div class="hl-item">🏖️ Staycation — Perfect for short getaways close to home</div>
+      <div class="hl-item">👑 Luxury Seeker — ${h.stars>=5?'World-class stay experience':'Premium comfort'}</div>
+    </div>
+  </section>
+
+  <section class="seo-section">
+    <h2>🌎 World Famous Hotel Collection</h2>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));">
+      <a href="/en/hotel/the-ritz-london" class="hcard-mini"><div class="hmini-body"><h3>🏨 The Ritz London</h3></div></a>
+      <a href="/en/hotel/burj-al-arab" class="hcard-mini"><div class="hmini-body"><h3>🏨 Burj Al Arab</h3></div></a>
+      <a href="/en/hotel/marina-bay-sands" class="hcard-mini"><div class="hmini-body"><h3>🏨 Marina Bay Sands</h3></div></a>
+      <a href="/en/hotel/mandarin-oriental-bangkok" class="hcard-mini"><div class="hmini-body"><h3>🏨 Mandarin Oriental</h3></div></a>
+      <a href="/en/hotel/atlantis-dubai" class="hcard-mini"><div class="hmini-body"><h3>🏨 Atlantis Dubai</h3></div></a>
+      <a href="/en/hotel/aman-tokyo-otemachi" class="hcard-mini"><div class="hmini-body"><h3>🏨 Aman Tokyo</h3></div></a>
+      <a href="/en/hotel/four-seasons-george-v-paris" class="hcard-mini"><div class="hmini-body"><h3>🏨 Four Seasons Paris</h3></div></a>
+      <a href="/en/hotel/the-plaza-new-york" class="hcard-mini"><div class="hmini-body"><h3>🏨 The Plaza NY</h3></div></a>
+    </div>
+  </section>
+
+  <section class="seo-section">
+    <h2>🌏 Explore Other Destinations</h2>
+    <div class="seo-links" style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${h.country_slug ? '<a href="/en/hotels/'+h.country_slug+'" class="seo-link">🏨 Hotels in '+esc(h.country_name)+'</a>' : ''}
+      ${cityPath ? '<a href="'+cityPath+'" class="seo-link">📍 Hotels in '+esc(h.city_name||h.city)+'</a>' : ''}
+      <a href="/hotels/" class="seo-link">🌍 All Hotels — 190+ Countries</a>
+      <a href="/en/hotels/united-states" class="seo-link">🇺🇸 Hotels in USA</a>
+      <a href="/en/hotels/japan" class="seo-link">🇯🇵 Hotels in Japan</a>
+      <a href="/en/hotels/france" class="seo-link">🇫🇷 Hotels in France</a>
+      <a href="/en/hotels/united-kingdom" class="seo-link">🇬🇧 Hotels in UK</a>
+      <a href="/book/" class="seo-link">📖 MyTriv Book</a>
+    </div>
+  </section>
+
+  <section class="seo-section" role="region"><h2>💎 Why Book Through MyTriv?</h2><div class="highlight-grid"><div class="hl-item">🔍 Compare 8 OTAs at once</div><div class="hl-item">🏰 Virtual Hotel Ownership — Own digital assets</div><div class="hl-item">🪙 Earn TrivCoin — Collect & redeem</div><div class="hl-item">🤖 AI Travel — Smart recommendations</div><div class="hl-item">🌍 190+ Countries — Interactive map</div><div class="hl-item">💰 100% Free — Go to partner OTAs</div></div></section>
+
+</div>`;
 
       res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
       res.send(shell({ title, desc, canonical: SITE + '/en/hotel/' + slug, ogImage, body, schema, lang: 'en', user: req.user }));

@@ -1818,6 +1818,8 @@ const POI_OVERPASS = (r, lat, lng) => `[out:json][timeout:60];(` +
   `node["shop"~"^(mall|supermarket|convenience)$"](around:${r},${lat},${lng});` +
   `way["shop"~"^(mall|supermarket|convenience)$"](around:${r},${lat},${lng});` +
   `);out center;`;
+const POI_EN_CAT = { Restoran: 'Restaurant', Kafe: 'Cafe', Wisata: 'Attraction', Transport: 'Transport', Belanja: 'Shopping', Kesehatan: 'Health', Lainnya: 'Other' };
+function applyPoiLang(d, lang) { if (lang !== 'en' || !d || !Array.isArray(d.poi)) return d; d.poi.forEach(function (p) { if (p.cat && POI_EN_CAT[p.cat]) p.cat = POI_EN_CAT[p.cat]; }); return d; }
 function haversineM(aLat, aLng, bLat, bLng) {
   const R = 6371000, dLat = (bLat - aLat) * Math.PI / 180, dLng = (bLng - aLng) * Math.PI / 180;
   const x = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * Math.PI / 180) * Math.cos(bLat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
@@ -1866,7 +1868,7 @@ app.get('/api/hotel-poi', async (req, res) => {
     if (cached.rows.length && Date.now() - new Date(cached.rows[0].fetched_at).getTime() < POI_CACHE_TTL_MS) {
       const data = cached.rows[0].poi_json;
       data.cached = true;
-      return res.set('Cache-Control', 'public, max-age=86400').json(data);
+      return res.set('Cache-Control', 'public, max-age=86400').json(applyPoiLang(data, req.query.lang));
     }
     const run = poiQueue.then(async () => {
       const pois = await fetchPoisOverpass(lat, lng, radius);
@@ -1879,7 +1881,7 @@ app.get('/api/hotel-poi', async (req, res) => {
     if (hotelId) {
       await pool.query('INSERT INTO hotel_pois(hotel_id,poi_json) VALUES($1,$2) ON CONFLICT (hotel_id) DO UPDATE SET poi_json=$2, fetched_at=NOW()', [hotelId, out]);
     }
-    return res.set('Cache-Control', 'public, max-age=86400').json(out);
+    return res.set('Cache-Control', 'public, max-age=86400').json(applyPoiLang(out, req.query.lang));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
