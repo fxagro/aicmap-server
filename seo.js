@@ -655,29 +655,55 @@ const body = `
   </section>
 
 
-  <!-- ═══ INTERACTIVE MAP (LAZY LOAD) ═══ -->
+  <!-- ═══ INTERACTIVE MAP (MAPLIBRE + POI, LAZY) ═══ -->
   <section class="seo-section">
     <h2>🗺️ Peta Interaktif ${esc(h.name)}</h2>
-    <div id="hotel-map" style="height:350px;border-radius:14px;border:1px solid var(--border);background:var(--card);overflow:hidden;position:relative;">
-      <div id="map-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:14px;">🗺️ Klik untuk memuat peta</div>
+    <div id="poi-filters" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
+    <div id="hotel-map" style="height:400px;border-radius:14px;border:1px solid var(--border);background:var(--card);overflow:hidden;position:relative;">
+      <div id="map-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:14px;text-align:center;flex-direction:column;gap:8px;cursor:pointer;">🗺️ Klik untuk memuat peta interaktif<br><span style="font-size:12px;opacity:.8;">Restoran · Wisata · Transport · Belanja di sekitar</span></div>
     </div>
+    <style>
+    .poi-dot{width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;}
+    .poi-dot.hotel-dot{width:30px;height:30px;font-size:16px;border-color:var(--cy);}
+    #poi-filters button{background:var(--card);border:1px solid var(--border);color:var(--txt);padding:5px 12px;border-radius:20px;cursor:pointer;font-size:12px;}
+    #poi-filters button.active{background:var(--cy);color:#060B13;border-color:var(--cy);font-weight:700;}
+    </style>
     <script>
     (function(){var loaded=false;var mapEl=document.getElementById('hotel-map');var ph=document.getElementById('map-placeholder');
+    var lat=${Number(h.lat||0)},lng=${Number(h.lng||0)},hotelId=${Number(h.id)||0};
+    var NAME=${JSON.stringify(h.name)},LOC=${JSON.stringify(loc)};
+    var byCat={};
+    function esc2(x){return String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
     function loadMap(){if(loaded)return;loaded=true;if(ph)ph.style.display='none';
-    var css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    var js=document.createElement('script');js.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    var css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
+    var js=document.createElement('script');js.src='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
     js.onload=function(){
-    var m=L.map('hotel-map').setView([${h.lat||0},${h.lng||0}],15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(m);
-    L.marker([${h.lat||0},${h.lng||0}]).addTo(m).bindPopup('<b>${esc(h.name).replace(/'/g,"\'")}</b><br>${esc(loc).replace(/'/g,"\'")}').openPopup();
-    setTimeout(function(){m.invalidateSize();},200);
+    var map=new maplibregl.Map({container:'hotel-map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lng,lat],zoom:15});
+    map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
+    var el=document.createElement('div');el.className='poi-dot hotel-dot';el.textContent='🏨';
+    new maplibregl.Marker({element:el}).setLngLat([lng,lat]).setPopup(new maplibregl.Popup({offset:12}).setHTML('<b>'+esc2(NAME)+'</b><br>'+esc2(LOC))).addTo(map);
+    fetch('/maps/api/hotel-poi?hotel_id='+hotelId+'&r=2500').then(function(r){return r.json();}).then(function(d){
+    var pois=d.poi||[];if(!pois.length)return;
+    var colors={Restoran:'#EF4444',Kafe:'#F59E0B',Wisata:'#10B981',Transport:'#3B82F6',Belanja:'#A855F7',Kesehatan:'#EC4899',Lainnya:'#64748B'};
+    pois.slice(0,150).forEach(function(p){
+    var dot=document.createElement('div');dot.className='poi-dot';dot.style.background=(colors[p.cat]||'#64748B');dot.textContent=p.emoji||'';
+    var m=new maplibregl.Marker({element:dot}).setLngLat([p.lng,p.lat]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>'+esc2(p.name)+'</b><br>'+esc2(p.cat)+(p.dist_m?'<br>~'+p.dist_m+' m':'')));
+    m.addTo(map);if(!byCat[p.cat])byCat[p.cat]=[];byCat[p.cat].push(m);
+    });
+    var fb=document.getElementById('poi-filters');fb.style.display='flex';
+    Object.keys(byCat).forEach(function(c){
+    var b=document.createElement('button');b.textContent=c+' ('+byCat[c].length+')';b.className='active';
+    b.onclick=function(){var on=!b.classList.contains('active');b.classList.toggle('active',on);(byCat[c]||[]).forEach(function(m2){m2.getElement().style.display=on?'':'none';});};
+    fb.appendChild(b);
+    });
+    }).catch(function(){});
+    setTimeout(function(){map.resize();},300);
     };document.head.appendChild(css);document.body.appendChild(js);}
     if(mapEl)mapEl.addEventListener('click',loadMap);
     })();
     </script>
-    <p style="color:var(--mut);font-size:12px;margin-top:8px;">📍 Koordinat: ${Number(h.lat||0).toFixed(4)}, ${Number(h.lng||0).toFixed(4)} — ${esc(loc)}</p>
+    <p style="color:var(--mut);font-size:12px;margin-top:8px;">📍 Koordinat: ${Number(h.lat||0).toFixed(4)}, ${Number(h.lng||0).toFixed(4)} — ${esc(loc)} · Peta © OpenFreeMap · POI © OpenStreetMap</p>
   </section>
-
   <!-- ═══ WALKING DISTANCE ═══ -->
   <section class="seo-section">
     <h2>🚶 Jarak dari ${esc(h.name)}</h2>

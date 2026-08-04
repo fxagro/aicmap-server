@@ -1793,6 +1793,96 @@ app.listen(PORT, () => {
 });
 
 // SEO pages (server-side rendered) — mounted after API routes
+
+// ---------- Hotel POI (lazy Overpass + DB cache, TTL 30d) ----------
+const https = require('https');
+const POI_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const POI_GROUPS = [
+  ['restaurant','\u{1F37D}\uFE0F','Restoran'],['fast_food','\u{1F35F}','Restoran'],
+  ['cafe','\u2615','Kafe'],['bar','\u{1F37B}','Kafe'],['pub','\u{1F37A}','Kafe'],
+  ['attraction','\u{1F4F8}','Wisata'],['museum','\u{1F3DB}\uFE0F','Wisata'],['gallery','\u{1F5BC}\uFE0F','Wisata'],['viewpoint','\u{1F440}','Wisata'],['park','\u{1F333}','Wisata'],['beach','\u{1F3D6}\uFE0F','Wisata'],
+  ['station','\u{1F689}','Transport'],['bus_station','\u{1F68C}','Transport'],['halt','\u{1F687}','Transport'],['fuel','\u26FD','Transport'],['parking','\u{1F17F}\uFE0F','Transport'],['taxi','\u{1F695}','Transport'],
+  ['mall','\u{1F6CD}\uFE0F','Belanja'],['supermarket','\u{1F6D2}','Belanja'],['convenience','\u{1F3EA}','Belanja'],['atm','\u{1F3E7}','Belanja'],['bank','\u{1F3E6}','Belanja'],
+  ['pharmacy','\u{1F48A}','Kesehatan'],['hospital','\u{1F3E5}','Kesehatan'],['clinic','\u{1FA7A}','Kesehatan'],['doctors','\u{1FA7A}','Kesehatan']
+];
+const POI_GROUP_MAP = {};
+for (const g of POI_GROUPS) POI_GROUP_MAP[g[0]] = { emoji: g[1], label: g[2] };
+const POI_OVERPASS = (r, lat, lng) => `[out:json][timeout:60];(` +
+  `node["amenity"~"^(restaurant|fast_food|cafe|bar|pub|fuel|parking|taxi|bus_station|pharmacy|hospital|clinic|doctors|atm|bank)$"](around:${r},${lat},${lng});` +
+  `way["amenity"~"^(restaurant|fast_food|cafe|bar|pub|fuel|parking|bus_station|pharmacy|hospital|clinic)$"](around:${r},${lat},${lng});` +
+  `node["tourism"~"^(attraction|museum|gallery|viewpoint)$"](around:${r},${lat},${lng});` +
+  `way["tourism"~"^(attraction|museum|gallery|viewpoint)$"](around:${r},${lat},${lng});` +
+  `node["leisure"~"^(park|playground)$"](around:${r},${lat},${lng});` +
+  `node["natural"="beach"](around:${r},${lat},${lng});` +
+  `node["railway"~"^(station|halt)$"](around:${r},${lat},${lng});` +
+  `node["shop"~"^(mall|supermarket|convenience)$"](around:${r},${lat},${lng});` +
+  `way["shop"~"^(mall|supermarket|convenience)$"](around:${r},${lat},${lng});` +
+  `);out center;`;
+function haversineM(aLat, aLng, bLat, bLng) {
+  const R = 6371000, dLat = (bLat - aLat) * Math.PI / 180, dLng = (bLng - aLng) * Math.PI / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * Math.PI / 180) * Math.cos(bLat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(x)));
+}
+async function fetchPoisOverpass(lat, lng, radius) {
+  const q = POI_OVERPASS(radius, lat, lng);
+  const body = 'data=' + encodeURIComponent(q);
+  const resp = await new Promise((ok, no) => {
+    const req = https.request({ hostname: 'overpass-api.de', path: '/api/interpreter', method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body), 'User-Agent': 'curl/7.68.0', 'Accept': '*/*' } }, re => { let d = ''; re.on('data', c => d += c); re.on('end', () => { try { ok(JSON.parse(d)) } catch (e) { no(e) } }); });
+    req.on('error', no); req.setTimeout(120000, () => { req.destroy(); no(new Error('timeout')) }); req.write(body); req.end();
+  });
+  if (!resp || !resp.elements) return [];
+  const seen = new Set(); const out = [];
+  for (const e of resp.elements) {
+    if (!e.tags) continue;
+    const name = (e.tags.name || '').trim(); if (!name) continue;
+    const pLat = e.type === 'node' ? e.lat : (e.center && e.center.lat);
+    const pLng = e.type === 'node' ? e.lon : (e.center && e.center.lon);
+    if (pLat == null || pLng == null) continue;
+    const tagKey = e.tags.amenity || e.tags.tourism || e.tags.leisure || e.tags.shop || e.tags.railway || e.tags.natural;
+    const g = POI_GROUP_MAP[tagKey]; if (!g) continue;
+    const d = haversineM(lat, lng, pLat, pLng); if (d > radius + 500) continue;
+    const key = tagKey + '|' + name + '|' + Math.round(pLat * 1000) + '|' + Math.round(pLng * 1000);
+    if (seen.has(key)) continue; seen.add(key);
+    out.push({ name, cat: g.label, emoji: g.emoji, lat: pLat, lng: pLng, dist_m: d });
+  }
+  out.sort((a, b) => a.dist_m - b.dist_m);
+  return out.slice(0, 150);
+}
+let poiQueue = Promise.resolve();
+app.get('/api/hotel-poi', async (req, res) => {
+  try {
+    const hotelId = parseInt(req.query.hotel_id) || 0;
+    const radius = Math.min(5000, Math.max(500, parseInt(req.query.r) || 2500));
+    let lat, lng;
+    if (hotelId) {
+      const h = await pool.query('SELECT lat, lng FROM hotels WHERE id=$1', [hotelId]);
+      if (!h.rows.length || h.rows[0].lat == null) return res.status(404).json({ error: 'hotel not found or no coords' });
+      lat = h.rows[0].lat; lng = h.rows[0].lng;
+    } else {
+      lat = parseFloat(req.query.lat); lng = parseFloat(req.query.lng);
+      if (!lat || !lng) return res.status(400).json({ error: 'hotel_id or lat/lng required' });
+    }
+    const cached = await pool.query('SELECT poi_json, fetched_at FROM hotel_pois WHERE hotel_id=$1', [hotelId]);
+    if (cached.rows.length && Date.now() - new Date(cached.rows[0].fetched_at).getTime() < POI_CACHE_TTL_MS) {
+      const data = cached.rows[0].poi_json;
+      data.cached = true;
+      return res.set('Cache-Control', 'public, max-age=86400').json(data);
+    }
+    const run = poiQueue.then(async () => {
+      const pois = await fetchPoisOverpass(lat, lng, radius);
+      await new Promise(r2 => setTimeout(r2, 1200));
+      return pois;
+    });
+    poiQueue = run.catch(() => {});
+    const pois = await run;
+    const out = { hotel_id: hotelId, center: { lat, lng }, radius, count: pois.length, poi: pois, cached: false };
+    if (hotelId) {
+      await pool.query('INSERT INTO hotel_pois(hotel_id,poi_json) VALUES($1,$2) ON CONFLICT (hotel_id) DO UPDATE SET poi_json=$2, fetched_at=NOW()', [hotelId, out]);
+    }
+    return res.set('Cache-Control', 'public, max-age=86400').json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 const createSeoRouter = require('./seo');
 app.use(createSeoRouter({ pool, generatePartnerLink: generateTravelpayoutsPartnerLink }));
 
