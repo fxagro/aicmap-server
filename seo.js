@@ -809,7 +809,7 @@ const body = `
   </section>
 
 </div>`
-      res.set('Cache-Control', 'public, max-age=3600');
+      res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
       res.send(shell({ title, desc, canonical: `${SITE}/hotel/${slug}`, ogImage, body, schema, user: req.user }));
     } catch (e) { console.error('hotel page error:', e.message); res.status(500).send('error'); }
   });
@@ -898,7 +898,7 @@ const body = `
       '<section class="sec"><h2>🎮 Own This Hotel Virtually — MyTriv Monopoly</h2><p>' + esc(h.name) + ' is available as a <strong>Virtual Monopoly asset</strong>. Buy virtual ownership with TrivCoin and trade on the MyTriv Marketplace.</p><p><em>This is digital asset ownership within MyTriv ecosystem — not real-world hotel ownership.</em></p></section>' +
       '<section class="sec"><h2>🔗 Explore More</h2><div class="link-row">' + (h.country_slug ? '<a href="/en/hotels/' + h.country_slug + '">🏨 Hotels in ' + esc(h.country_name) + '</a>' : '') + '<a href="/hotels/">🌍 All Hotels</a><a href="/book/">📖 MyTriv Book</a></div></section></div>';
 
-      res.set('Cache-Control', 'public, max-age=3600');
+      res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
       res.send(shell({ title, desc, canonical: SITE + '/en/hotel/' + slug, ogImage, body, schema, lang: 'en', user: req.user }));
     } catch(e) { console.error('en hotel page error:', e.message); res.status(500).send('error'); }
   });
@@ -938,7 +938,7 @@ const body = `
   </div>
 </div>`;
       const schema = { '@context': 'https://schema.org', '@type': 'Country', name: c.name, url: SITE + '/hotels/' + country };
-      res.set('Cache-Control', 'public, max-age=3600');
+      res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
       res.send(shell({ title, desc, canonical: `${SITE}/hotels/${country}`, ogImage: hotelImage({}, 800), body, schema, user: req.user }));
     } catch (e) { console.error('country page error:', e.message); res.status(500).send('error'); }
   });
@@ -1000,7 +1000,7 @@ const body = `
   </div>
 </div>`;
       const schema = { '@context': 'https://schema.org', '@type': 'City', name: c.name, url: SITE + '/hotels/' + country + '/' + city };
-      res.set('Cache-Control', 'public, max-age=3600');
+      res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
       res.send(shell({ title, desc, canonical: `${SITE}/hotels/${country}/${city}`, ogImage: hotelImage({}, 800), body, schema, user: req.user }));
     } catch (e) { console.error('city page error:', e.message); res.status(500).send('error'); }
   });
