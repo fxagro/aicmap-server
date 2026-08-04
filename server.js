@@ -976,7 +976,7 @@ app.get('/api/hotels/search', async (req, res) => {
         conditions.push(`LOWER(h.country) = $${params.length}`);
       } else {
         params.push(`%${country.toLowerCase()}%`);
-        conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length} OR LOWER(COALESCE(cc2.name,'')) LIKE $${params.length})`);
+        conditions.push(`(LOWER(h.country) LIKE $${params.length} OR LOWER(COALESCE(cc.name,'')) LIKE $${params.length})`);
       }
     } else if (city) {
       const q = city.toLowerCase();
@@ -1044,23 +1044,18 @@ app.get('/api/hotels/search', async (req, res) => {
     const joinClause = `
        FROM hotels h
        LEFT JOIN cities c ON c.id = h.city_id
-       LEFT JOIN countries cc ON cc.code = c.country_code
-       LEFT JOIN cities c2 ON (LOWER(c2.slug) = LOWER(h.city) OR LOWER(c2.name) = LOWER(h.city))
-       LEFT JOIN countries cc2 ON LOWER(cc2.name) = LOWER(h.country)`;
+       LEFT JOIN countries cc ON cc.code = c.country_code`;
     const { rows } = await pool.query(
       `SELECT h.id, h.name, h.city, h.country, h.lat, h.lng, h.stars, h.rating, h.reviews, h.price_idr, h.price_formatted, h.currency, h.image, h.amenities, h.description, h.slug,
-              COALESCE(c.slug, c2.slug) AS city_slug,
-              COALESCE(cc.code, c2.country_code, cc2.code) AS country_code
+              c.slug AS city_slug,
+              cc.code AS country_code,
+              COUNT(*) OVER() AS total_count
        ${joinClause}
        ${where} ORDER BY h.rating DESC NULLS LAST, h.stars DESC NULLS LAST LIMIT $${params.length}`,
       params
     );
 
-    const countRes = await pool.query(
-      `SELECT count(*)::int AS total ${joinClause} ${where}`,
-      params.slice(0, params.length - 1)
-    );
-    const totalCount = countRes.rows[0] ? countRes.rows[0].total : rows.length;
+    const totalCount = rows.length ? (rows[0].total_count || rows.length) : 0;
 
     const source = 'db';
     if (rows.length > 0) {
