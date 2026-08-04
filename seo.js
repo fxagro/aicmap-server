@@ -509,11 +509,15 @@ Sitemap: ${SITE}/sitemap.xml
         similarHotels = s.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       } catch (e) { /* ignore */ }
       let reviewsHtml = '';
+      let rvCount = 0, rvAvg = 0;
       try {
         const rvAgg = await pool.query("SELECT COUNT(*)::int AS count, COALESCE(AVG(rating),0)::numeric(3,1) AS avg FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='id'", [slug]);
+        rvCount = rvAgg.rows[0].count;
+        rvAvg = Number(rvAgg.rows[0].avg);
         const rvList = await pool.query("SELECT author_name, rating, title, body, created_at FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='id' ORDER BY created_at DESC LIMIT 50", [slug]);
-        reviewsHtml = reviewSectionHtml(h, slug, 'id', req.user, { count: rvAgg.rows[0].count, avg: Number(rvAgg.rows[0].avg) }, rvList.rows);
+        reviewsHtml = reviewSectionHtml(h, slug, 'id', req.user, { count: rvCount, avg: rvAvg }, rvList.rows);
       } catch (e) { /* reviews not ready */ }
+      if (rvCount > 0) schema.aggregateRating = { '@type': 'AggregateRating', ratingValue: rvAvg.toFixed(1), reviewCount: rvCount, bestRating: 5, worstRating: 1 };
 const body = `
 <div class="crumbs"><a href="/hotels">Beranda</a> › ${h.country_slug ? `<a href="/hotels/${h.country_slug}">${esc(h.country_name)}</a>` : ''} › ${cityPath ? `<a href="${cityPath}">${esc(h.city_name || h.city)}</a>` : ''} › <b>${esc(h.name)}</b></div>
 <div class="wrap">
@@ -1005,10 +1009,13 @@ const body = `
         similarHotels = s.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       } catch(e) {}
       let reviewsHtml = '';
+      let rvCount = 0, rvAvg = 0;
       try {
         const rvAgg = await pool.query("SELECT COUNT(*)::int AS count, COALESCE(AVG(rating),0)::numeric(3,1) AS avg FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='en'", [slug]);
+        rvCount = rvAgg.rows[0].count;
+        rvAvg = Number(rvAgg.rows[0].avg);
         const rvList = await pool.query("SELECT author_name, rating, title, body, created_at FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='en' ORDER BY created_at DESC LIMIT 50", [slug]);
-        reviewsHtml = reviewSectionHtml(h, slug, 'en', req.user, { count: rvAgg.rows[0].count, avg: Number(rvAgg.rows[0].avg) }, rvList.rows);
+        reviewsHtml = reviewSectionHtml(h, slug, 'en', req.user, { count: rvCount, avg: rvAvg }, rvList.rows);
       } catch (e) { /* reviews not ready */ }
 
       const title = h.name + ' — Best Price & Booking ' + loc + ' | MyTriv Hotels';
@@ -1021,6 +1028,7 @@ const body = `
         priceRange: price, url: SITE + '/en/hotel/' + slug
       };
       if (h.lat && h.lng) schema.geo = { '@type': 'GeoCoordinates', latitude: h.lat, longitude: h.lng };
+      if (rvCount > 0) schema.aggregateRating = { '@type': 'AggregateRating', ratingValue: rvAvg.toFixed(1), reviewCount: rvCount, bestRating: 5, worstRating: 1 };
 
       // English body (full parity with ID)
       const body = `
