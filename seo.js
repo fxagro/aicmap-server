@@ -202,14 +202,14 @@ footer a{color:var(--cy)}
 </style>
 </head>
 <body>
-<header><a href="/" class="logo">MyTriv <span>Hotels</span></a><nav>
+<header role="banner"><a href="/" class="logo" aria-label="MyTriv Hotels — Home">MyTriv <span>Hotels</span></a><nav>
 <a href="/hotels">Hotel Map</a>
 <a href="/hotels/indonesia">Indonesia</a>
 <a href="/book">Booking</a>
 <a href="${canonical.replace('/en/','/')}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">🇮🇩 ID</a> <a href="${canonical.includes('/en/') ? canonical : canonical.replace('/hotel/','/en/hotel/')}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">🇬🇧 EN</a> <button id="theme-toggle" onclick="toggleTheme()" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:700;">🌙 Dark</button>
 </nav></header>
 ${body}
-<footer><p>MyTriv Hotels — Interactive World Hotel Map. Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka, Expedia).</p>
+<footer style="padding:32px 24px;border-top:1px solid var(--border);margin-top:40px;color:var(--mut);font-size:13px;line-height:2;"><div style="max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;"><div><strong style="color:var(--txt);">Top Countries</strong><br><a href="/hotels/indonesia">Indonesia</a><br><a href="/hotels/thailand">Thailand</a><br><a href="/hotels/japan">Japan</a><br><a href="/hotels/singapore">Singapore</a><br><a href="/hotels/malaysia">Malaysia</a></div><div><strong style="color:var(--txt);">Popular Cities</strong><br><a href="/hotels/indonesia/bali">Bali</a><br><a href="/hotels/thailand/bangkok">Bangkok</a><br><a href="/hotels/japan/tokyo">Tokyo</a><br><a href="/hotels/france/paris">Paris</a><br><a href="/hotels/united-kingdom/london">London</a></div><div><strong style="color:var(--txt);">MyTriv</strong><br><a href="/hotels/">Peta Interaktif</a><br><a href="/book/">Booking</a><br><a href="/hotels/about.html">Panduan Monopoly</a><br><a href="/hotels/">190+ Negara</a></div><div><strong style="color:var(--txt);">Partners</strong><br><span>Booking · Agoda · Trip<br>Traveloka · Expedia<br>Hotels.com · Kayak · Klook</span></div></div><p style="text-align:center;margin-top:20px;">MyTriv Hotels — 120.000+ hotel di 190+ negara. Bandingkan 8 OTA. Virtual Monopoly.</p><p style="text-align:center;font-size:11px;">© 2026 MyTriv · Harga estimasi</p> Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka, Expedia).</p>
 <p><a href="/sitemap.xml">Sitemap</a> · <a href="/hotels">Peta Interaktif</a> · © 2026 MyTriv</p></footer>
 <script>
 (function(){var m=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',m);})();
@@ -756,8 +756,11 @@ const body = `
     </div>
   </section>
 
-  <section class="seo-section">
-    <h2>🔗 Jelajahi Lebih Lanjut</h2>
+  <section class="seo-section" role="region"><h2>💎 Mengapa Booking Lewat MyTriv?</h2><div class="highlight-grid"><div class="hl-item">🔍 Bandingkan 8 OTA sekaligus</div><div class="hl-item">🏰 Virtual Hotel Ownership — Miliki aset digital</div><div class="hl-item">🪙 Earn TrivCoin — Kumpulkan & redeem</div><div class="hl-item">🤖 AI Travel — Rekomendasi cerdas</div><div class="hl-item">🌍 190+ Negara — Peta interaktif</div><div class="hl-item">💰 100% Gratis — Ke OTA partner</div></div></section>
+
+<section class="seo-section"><h2>🌏 Destinasi Populer</h2><div class="seo-links" style="display:flex;flex-wrap:wrap;gap:8px;">${h.country_slug ? `<a href="/hotels/`+h.country_slug+`" class="seo-link">🏨 `+esc(h.country_name)+`</a>` : ""}${cityPath ? `<a href="`+cityPath+`" class="seo-link">📍 `+esc(h.city_name||h.city)+`</a>` : ""}<a href="/hotels/indonesia" class="seo-link">🇮🇩 Indonesia</a><a href="/hotels/thailand" class="seo-link">🇹🇭 Thailand</a><a href="/hotels/japan" class="seo-link">🇯🇵 Jepang</a><a href="/hotels/singapore" class="seo-link">🇸🇬 Singapura</a><a href="/hotels/france" class="seo-link">🇫🇷 Prancis</a><a href="/hotels/united-states" class="seo-link">🇺🇸 USA</a><a href="/book/" class="seo-link">📖 Booking</a></div></section>
+
+<section class="seo-section"><h2>🔗 Jelajahi Lebih Lanjut</h2>
     <div class="seo-links">
       ${h.country_slug ? `<a href="/hotels/${h.country_slug}" class="seo-link">🏨 Hotel di ${esc(h.country_name)}</a>` : ''}
       ${cityPath ? `<a href="${cityPath}" class="seo-link">📍 Hotel di ${esc(h.city_name || h.city)}</a>` : ''}
