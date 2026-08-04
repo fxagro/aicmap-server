@@ -217,6 +217,22 @@ h2{color:#fff;font-size:20px;margin:28px 0 14px;border-bottom:1px solid #1e293b;
 footer{border-top:1px solid #1e293b;padding:28px 24px;text-align:center;color:var(--mut);font-size:13px;margin-top:40px}
 footer a{color:var(--cy)}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.review-summary{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--card);border:1px solid #1e293b;border-radius:12px;padding:14px 18px;margin-bottom:12px}
+.review-score{font-size:38px;font-weight:900;color:var(--cy)}
+.review-list{display:flex;flex-direction:column;gap:12px}
+.review-card{background:var(--card);border:1px solid #1e293b;border-radius:12px;padding:14px 16px}
+.review-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.review-head b{color:#fff}
+.review-date{color:var(--mut);font-size:12px;margin-left:auto}
+.review-card h3{color:#fff;font-size:15px;margin:6px 0 4px}
+.review-card p{color:var(--mut);font-size:14px}
+.review-empty{color:var(--mut);font-style:italic}
+.review-form{background:var(--card);border:1px solid #1e293b;border-radius:12px;padding:16px;margin-top:14px}
+.review-form h3{color:#fff;margin-bottom:10px}
+.rv-stars{font-size:26px;cursor:pointer;letter-spacing:4px;color:#3b4a63;margin-bottom:8px}
+.review-form input[type=text],.review-form textarea{width:100%;background:#0b1220;border:1px solid #1e293b;color:var(--txt);border-radius:8px;padding:10px;margin-bottom:8px;font-family:inherit;font-size:14px}
+.review-form button{background:var(--cy);color:#060B13;border:none;padding:10px 20px;border-radius:8px;font-weight:800;cursor:pointer}
+#rv-msg{font-size:13px;margin-top:8px;color:var(--cy)}
 @media(max-width:640px){.ctas{grid-template-columns:1fr}.hero h1{font-size:24px}}
 </style>
 </head>
@@ -240,6 +256,66 @@ function toggleTheme(){var e=document.documentElement;var c=e.getAttribute('data
 
 function esc(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function reviewSectionHtml(h, slug, lang, user, agg, reviews) {
+  const en = lang === 'en';
+  const avg = agg.count ? agg.avg : 0;
+  const stars = '\u2605'.repeat(Math.round(avg)) + '\u2606'.repeat(5 - Math.round(avg));
+  const cards = (reviews || []).map(r => `
+    <div class="review-card">
+      <div class="review-head"><b>${esc(r.author_name)}</b><span class="review-stars">${'\u2605'.repeat(r.rating)}${'\u2606'.repeat(5 - r.rating)}</span><span class="review-date">${new Date(r.created_at).toLocaleDateString(en ? 'en-US' : 'id-ID')}</span></div>
+      ${r.title ? `<h3>${esc(r.title)}</h3>` : ''}
+      <p>${esc(r.body)}</p>
+    </div>`).join('');
+  const empty = agg.count ? '' : `<p class="review-empty">${en ? 'No reviews yet. Be the first to review!' : 'Belum ada ulasan. Jadilah yang pertama memberi ulasan!'}</p>`;
+  const form = user ? `
+    <div class="review-form">
+      <h3>${en ? '\u270f\ufe0f Write a Review' : '\u270f\ufe0f Tulis Ulasan'}</h3>
+      <div class="rv-stars" id="rv-stars">${[1, 2, 3, 4, 5].map(i => `<span data-v="${i}">\u2605</span>`).join('')}</div>
+      <input id="rv-title" maxlength="120" placeholder="${en ? 'Title (optional)' : 'Judul (opsional)'}">
+      <textarea id="rv-body" rows="4" maxlength="3000" placeholder="${en ? 'Share your experience staying here...' : 'Ceritakan pengalaman menginap Anda di sini...'}"></textarea>
+      <button type="button" onclick="submitReview()">${en ? 'Submit Review' : 'Kirim Ulasan'}</button>
+      <p id="rv-msg"></p>
+    </div>` : `
+    <div class="review-form">
+      <p>${en ? '\U0001f510 Login to write a review.' : '\U0001f510 Masuk untuk menulis ulasan.'}</p>
+      <a class="mini-cta" href="/auth/login?redirect=${encodeURIComponent('/' + (en ? 'en/' : '') + 'hotel/' + slug)}">${en ? 'Login with Google' : 'Masuk dengan Google'}</a>
+    </div>`;
+  return `
+  <section class="seo-section" id="reviews">
+    <h2>\u2b50 ${en ? 'Guest Reviews' : 'Ulasan Tamu'} ${esc(h.name)}</h2>
+    <div class="review-summary"><span class="review-score">${agg.count ? avg.toFixed(1) : '\u2014'}</span><span class="review-stars">${stars}</span><span class="review-count">${agg.count} ${en ? 'reviews' : 'ulasan'}</span></div>
+    <div class="review-list">${cards || empty}</div>
+    ${form}
+    <script>
+    (function(){
+      var el = document.getElementById('rv-stars');
+      var v = 5;
+      if (el) {
+        var ss = el.querySelectorAll('span');
+        ss.forEach(function (x, i) { x.style.color = i < 4 ? '#FFD700' : '#3b4a63'; x.onclick = function () { v = i + 1; ss.forEach(function (y, j) { y.style.color = j <= i ? '#FFD700' : '#3b4a63'; }); }; });
+      }
+      window.submitReview = function () {
+        var title = (document.getElementById('rv-title') || {}).value || '';
+        var body = (document.getElementById('rv-body') || {}).value || '';
+        var msg = document.getElementById('rv-msg');
+        var en = ${en ? 'true' : 'false'};
+        msg.textContent = '';
+        if (body.trim().length < 20) { msg.textContent = en ? 'Please write at least 20 characters.' : 'Mohon tulis minimal 20 karakter.'; return; }
+        fetch('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hotel_slug: '${slug}', lang: '${lang}', rating: v, title: title, body: body }) })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          if (res.ok) {
+            msg.textContent = en ? 'Thank you! Your review has been submitted and is awaiting moderation.' : 'Terima kasih! Ulasan Anda telah dikirim dan sedang menunggu moderasi.';
+            var tb = document.getElementById('rv-body'); if (tb) tb.value = '';
+          } else { msg.textContent = res.d && res.d.error ? res.d.error : 'Error'; }
+        })
+        .catch(function () { msg.textContent = 'Network error'; });
+      };
+    })();
+    <\/script>
+  </section>`;
 }
 
 module.exports = function createSeoRouter({ pool, generatePartnerLink }) {
@@ -432,6 +508,12 @@ Sitemap: ${SITE}/sitemap.xml
         const s = await pool.query('SELECT name, slug, stars, rating, price_idr, image FROM hotels h JOIN cities c ON c.id = h.city_id WHERE h.stars = $1 AND c.country_code = $2 AND h.id <> $3 ORDER BY h.rating DESC NULLS LAST LIMIT 4', [h.stars || 4, h.country_code, h.id]);
         similarHotels = s.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       } catch (e) { /* ignore */ }
+      let reviewsHtml = '';
+      try {
+        const rvAgg = await pool.query("SELECT COUNT(*)::int AS count, COALESCE(AVG(rating),0)::numeric(3,1) AS avg FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='id'", [slug]);
+        const rvList = await pool.query("SELECT author_name, rating, title, body, created_at FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='id' ORDER BY created_at DESC LIMIT 50", [slug]);
+        reviewsHtml = reviewSectionHtml(h, slug, 'id', req.user, { count: rvAgg.rows[0].count, avg: Number(rvAgg.rows[0].avg) }, rvList.rows);
+      } catch (e) { /* reviews not ready */ }
 const body = `
 <div class="crumbs"><a href="/hotels">Beranda</a> › ${h.country_slug ? `<a href="/hotels/${h.country_slug}">${esc(h.country_name)}</a>` : ''} › ${cityPath ? `<a href="${cityPath}">${esc(h.city_name || h.city)}</a>` : ''} › <b>${esc(h.name)}</b></div>
 <div class="wrap">
@@ -587,6 +669,7 @@ const body = `
     </div>
   </section>
 
+  ${reviewsHtml}
   <!-- 13. AI TRAVEL TIPS -->
   <section class="seo-section">
     <h2>🤖 AI Travel Tips — Liburan di ${esc(h.city_name || h.city)}</h2>
@@ -921,6 +1004,12 @@ const body = `
         const s = await pool.query('SELECT name, slug, stars, rating, price_idr, image FROM hotels h JOIN cities c ON c.id = h.city_id WHERE h.stars = $1 AND c.country_code = $2 AND h.id <> $3 ORDER BY h.rating DESC NULLS LAST LIMIT 4', [h.stars || 4, h.country_code, h.id]);
         similarHotels = s.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       } catch(e) {}
+      let reviewsHtml = '';
+      try {
+        const rvAgg = await pool.query("SELECT COUNT(*)::int AS count, COALESCE(AVG(rating),0)::numeric(3,1) AS avg FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='en'", [slug]);
+        const rvList = await pool.query("SELECT author_name, rating, title, body, created_at FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='en' ORDER BY created_at DESC LIMIT 50", [slug]);
+        reviewsHtml = reviewSectionHtml(h, slug, 'en', req.user, { count: rvAgg.rows[0].count, avg: Number(rvAgg.rows[0].avg) }, rvList.rows);
+      } catch (e) { /* reviews not ready */ }
 
       const title = h.name + ' — Best Price & Booking ' + loc + ' | MyTriv Hotels';
       const desc = 'Check best prices for ' + h.name + ' in ' + loc + '. ' + am.slice(0, 3).join(', ') + '. Compare Booking.com, Agoda, Trip.com, Traveloka & more. Free booking, no extra fees.';
@@ -1071,6 +1160,8 @@ const body = `
       <details><summary>What transport options are available to ${esc(h.name)}?</summary><p>You can use taxis, ride-hailing services, or public transport to reach the hotel.</p></details>
     </div>
   </section>
+
+  ${reviewsHtml}
 
   <section class="seo-section">
     <h2>🤖 AI Travel Tips — Visiting ${esc(h.city_name || h.city)}</h2>
@@ -1398,6 +1489,46 @@ const body = `
       res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
       res.send(shell({ title, desc, canonical: `${SITE}/hotels/${country}/${city}`, ogImage: hotelImage({}, 800), body, schema, user: req.user }));
     } catch (e) { console.error('city page error:', e.message); res.status(500).send('error'); }
+  });
+
+  // ---- Review moderation panel (admin only) ----
+  router.get('/admin/reviews', async (req, res) => {
+    if (!req.user || req.user.role !== 'admin') return res.status(403).send('Forbidden');
+    const body = `
+<div class="wrap">
+  <h1>\U0001f6e1\ufe0f Review Moderation</h1>
+  <div class="row" style="margin:16px 0;">
+    <button onclick="loadReviews('pending')" class="mini-cta" style="background:#F59E0B;">Pending</button>
+    <button onclick="loadReviews('approved')" class="mini-cta">Approved</button>
+    <button onclick="loadReviews('rejected')" class="mini-cta" style="background:#ef4444;color:#fff;">Rejected</button>
+  </div>
+  <div id="rv-admin"></div>
+</div>
+<script>
+function esc2(x){return String(x||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function loadReviews(status){
+  fetch('/api/admin/reviews?status='+status).then(function(r){return r.json();}).then(function(d){
+    var rows=d.reviews||[];
+    var out='<h2>'+status.charAt(0).toUpperCase()+status.slice(1)+' ('+rows.length+')</h2><div class="grid">';
+    out+=rows.map(function(r){
+      return '<div class="hcard-mini" style="padding:14px;border:1px solid #1e293b;"><div class="review-head"><b>'+esc2(r.author_name)+'</b><span class="review-stars">'+'\u2605'.repeat(r.rating)+'\u2606'.repeat(5-r.rating)+'</span><span class="review-date">'+esc2(r.hotel_name||r.hotel_slug)+' \u00b7 '+r.lang+'</span></div>'
+        +(r.title?'<h3>'+esc2(r.title)+'</h3>':'')
+        +'<p style="color:var(--mut)">'+esc2(r.body)+'</p>'
+        +'<p style="font-size:12px;color:var(--mut)">'+new Date(r.created_at).toLocaleString()+' \u00b7 flags: '+((r.flags||[]).join(', ')||'none')+'</p>'
+        +'<div class="row" style="margin-top:10px;">'
+        +'<button class="mini-cta" onclick="setStatus('+r.id+',\'approved\')">\u2705 Approve</button> '
+        +'<button class="mini-cta" style="background:#ef4444;color:#fff;" onclick="setStatus('+r.id+',\'rejected\')">\U0001f6ab Reject</button>'
+        +'</div></div>';
+    }).join('');
+    out+='</div>';
+    document.getElementById('rv-admin').innerHTML=out;
+  }).catch(function(){document.getElementById('rv-admin').innerHTML='<p>Error loading.</p>';});
+}
+function setStatus(id,status){fetch('/api/admin/reviews/'+id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:status})}).then(function(r){return r.json();}).then(function(){loadReviews('pending');}).catch(function(){});}
+loadReviews('pending');
+<\/script>`;
+    res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
+    res.send(shell({ title: 'Review Moderation - MyTriv', desc: 'Approve or reject guest reviews', canonical: SITE + '/admin/reviews', ogImage: hotelImage({}, 800), body, user: req.user }));
   });
 
   return router;

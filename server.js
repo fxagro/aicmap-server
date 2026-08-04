@@ -1931,6 +1931,88 @@ app.get('/auth/callback', async function (req, res) {
 app.get('/auth/logout', function (req, res) { res.setHeader('Set-Cookie', authCookieHeader('', 0)); res.redirect(safeRedirect(req.query.redirect)); });
 app.get('/auth/me', function (req, res) { if (!req.user) return res.status(401).json({ user: null }); res.json({ user: { id: req.user.sub, email: req.user.email, name: req.user.name, avatar: req.user.avatar, role: req.user.role } }); });
 
+// ---------- Hotel Reviews (auto-filter + admin approval) ----------
+const REVIEW_MIN_LEN = 20;
+const REVIEW_MAX_LEN = 3000;
+const REVIEW_RATE_HOUR = 3;
+const REVIEW_DUP_DAYS = 30;
+const REVIEW_BAD_WORDS = /(anjing|bangsat|bajingan|goblok|tolol|idiot|bego|sialan|keparat|brengsek|kampret|jancok|ngentot|memek|kontol|babi|fuck|shit|bitch|asshole|bastard|dick|cunt|whore|slut|nigga|nigger)/i;
+const REVIEW_SPAM_LINKS = /(https?:\/\/|www\.|bit\.ly|t\.me|wa\.me|telegram|whatsapp)/i;
+
+function reviewFlags(body) {
+  const flags = [];
+  const t = String(body || '').toLowerCase();
+  if (t.length < REVIEW_MIN_LEN) flags.push('too_short');
+  if (t.length > REVIEW_MAX_LEN) flags.push('too_long');
+  if (REVIEW_SPAM_LINKS.test(t)) flags.push('links');
+  if (REVIEW_BAD_WORDS.test(t)) flags.push('profanity');
+  const caps = (String(body || '').match(/[A-Z]{4,}/g) || []).length;
+  if (caps > 3) flags.push('excess_caps');
+  const rep = (String(body || '').match(/(.)\1{5,}/g) || []).length;
+  if (rep > 2) flags.push('repetitive');
+  return flags;
+}
+
+app.post('/api/reviews', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'login_required' });
+    const uid = parseInt(req.user.sub, 10);
+    if (!uid) return res.status(401).json({ error: 'login_required' });
+    const { hotel_slug, rating, title, body, lang } = req.body || {};
+    const slug = String(hotel_slug || '').trim();
+    if (!slug) return res.status(400).json({ error: 'hotel_slug required' });
+    const rv = parseInt(rating, 10);
+    if (rv < 1 || rv > 5 || !Number.isInteger(rv)) return res.status(400).json({ error: 'rating 1-5' });
+    const b = String(body || '').trim();
+    if (b.length < REVIEW_MIN_LEN) return res.status(400).json({ error: 'too_short', min: REVIEW_MIN_LEN });
+    const t = String(title || '').trim().slice(0, 120);
+    const flags = reviewFlags(b + ' ' + t);
+    const dup = await pool.query("SELECT id FROM reviews WHERE user_id=$1 AND hotel_slug=$2 AND created_at > NOW() - ($3::int || ' days')::interval AND status IN ('pending','approved')", [uid, slug, REVIEW_DUP_DAYS]);
+    if (dup.rows.length) return res.status(409).json({ error: 'duplicate' });
+    const rate = await pool.query("SELECT COUNT(*)::int AS n FROM reviews WHERE user_id=$1 AND created_at > NOW() - interval '1 hour'", [uid]);
+    if (rate.rows[0].n >= REVIEW_RATE_HOUR) return res.status(429).json({ error: 'rate_limited' });
+    const hotel = await pool.query('SELECT id, name FROM hotels WHERE slug=$1', [slug]);
+    if (!hotel.rows.length) return res.status(404).json({ error: 'hotel not found' });
+    const author = (req.user.name || req.user.email || 'Guest').slice(0, 80);
+    const hard = flags.includes('links') || flags.includes('profanity');
+    const status = hard ? 'rejected' : 'pending';
+    const ins = await pool.query('INSERT INTO reviews (hotel_id, hotel_slug, user_id, author_name, rating, title, body, lang, status, flags, ip) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, status', [hotel.rows[0].id, slug, uid, author, rv, t, b, lang === 'en' ? 'en' : 'id', status, JSON.stringify(flags), String(req.ip || '').slice(0, 45)]);
+    res.json({ ok: true, id: ins.rows[0].id, status, flags });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/reviews', async (req, res) => {
+  try {
+    const slug = String(req.query.hotel_slug || '').trim();
+    if (!slug) return res.status(400).json({ error: 'hotel_slug required' });
+    const lang = req.query.lang === 'en' ? 'en' : 'id';
+    const { rows } = await pool.query('SELECT id, author_name, rating, title, body, created_at FROM reviews WHERE hotel_slug=$1 AND status=$2 AND lang=$3 ORDER BY created_at DESC LIMIT 50', [slug, 'approved', lang]);
+    const agg = await pool.query('SELECT COUNT(*)::int AS count, COALESCE(AVG(rating),0)::numeric(3,1) AS avg FROM reviews WHERE hotel_slug=$1 AND status=$2 AND lang=$3', [slug, 'approved', lang]);
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({ hotel_slug: slug, lang, aggregate: { count: agg.rows[0].count, avg: Number(agg.rows[0].avg) }, reviews: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+function adminOnly(req, res, next) { if (!req.user || req.user.role !== 'admin') return res.status(403).json({ error: 'forbidden' }); next(); }
+app.get('/api/admin/reviews', adminOnly, async (req, res) => {
+  try {
+    const status = req.query.status;
+    if (!['pending', 'approved', 'rejected'].includes(status)) return res.status(400).json({ error: 'bad status' });
+    const { rows } = await pool.query('SELECT r.*, h.name AS hotel_name FROM reviews r LEFT JOIN hotels h ON h.id=r.hotel_id WHERE r.status=$1 ORDER BY r.created_at ASC LIMIT 100', [status]);
+    res.json({ status, reviews: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/admin/reviews/:id/status', adminOnly, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const status = ['approved', 'rejected'].includes(req.body && req.body.status) ? req.body.status : null;
+    if (!id || !status) return res.status(400).json({ error: 'id & status required' });
+    const up = await pool.query('UPDATE reviews SET status=$2, updated_at=NOW() WHERE id=$1', [id, status]);
+    if (!up.rowCount) return res.status(404).json({ error: 'not found' });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 const createSeoRouter = require('./seo');
 app.use(createSeoRouter({ pool, generatePartnerLink: generateTravelpayoutsPartnerLink }));
 
