@@ -67,8 +67,12 @@ function slugify(s) {
   return t.replace(/^-+|-+$/g, '').slice(0, 120);
 }
 
+function sanStars(s) { const n = Number(s); if (!Number.isFinite(n) || n < 1) return 4; return Math.min(5, Math.max(1, Math.round(n))); }
+function sanRating(r) { const n = Number(r); return Number.isFinite(n) && n >= 0 && n <= 10 ? n : null; }
+function sanPrice(p) { const n = Number(p); if (!Number.isFinite(n) || n <= 0 || n > 50000000) return null; return Math.round(n); }
 function fmtPrice(idr) {
-  const n = parseInt(idr || 800000);
+  const n = Number(idr);
+  if (!Number.isFinite(n) || n < 0) return 'Harga bervariasi';
   if (n >= 1000000) return `Rp ${(n / 1000000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} jt`;
   if (n >= 1000) return `Rp ${Math.round(n / 1000)} rb`;
   return `Rp ${n}`;
@@ -309,9 +313,13 @@ Sitemap: ${SITE}/sitemap.xml
         WHERE h.slug = $1`, [slug]);
       if (!rows.length) return res.status(404).send(shell({ title: 'Hotel tidak ditemukan - MyTriv Hotels', desc: 'Hotel tidak ditemukan', canonical: SITE + req.path, ogImage: hotelImage({}, 800), body: '<div class="wrap"><h1>Hotel tidak ditemukan</h1></div>' }));
       const h = rows[0];
+      h.stars = sanStars(h.stars);
+      h.rating = sanRating(h.rating);
+      h.price_idr = sanPrice(h.price_idr);
       track(req, 'page_views', {});
       const am = amenities(h);
       const price = fmtPrice(h.price_idr);
+      const hasPrice = h.price_idr != null;
       const links = partnerLinks(generatePartnerLink, h, h.city_name);
       const loc = `${h.city_name || h.city || ''}, ${h.country_name || h.country || ''}`;
       const cityPath = h.country_slug ? `/hotels/${h.country_slug}/${h.city_slug || slugify(h.city_name || h.city)}` : null;
@@ -321,7 +329,7 @@ Sitemap: ${SITE}/sitemap.xml
       let nearby = [];
       if (h.city_id) {
         const n = await pool.query(`SELECT name, slug, stars, rating, price_idr, image FROM hotels WHERE city_id = $1 AND slug <> $2 ORDER BY rating DESC NULLS LAST LIMIT 6`, [h.city_id, slug]);
-        nearby = n.rows;
+        nearby = n.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       }
 
       const title = `${h.name} — Harga & Booking ${loc} | MyTriv Hotels`;
@@ -345,7 +353,7 @@ Sitemap: ${SITE}/sitemap.xml
       function hashHotel(id) { let h = 5381; for (let c of String(id)) h = ((h << 5) + h + c.charCodeAt(0)) >>> 0; return h; }
       const hv = hashHotel(h.id);
       const starLevel = h.stars >= 5 ? 'mewah bintang 5' : h.stars >= 4 ? 'premium bintang 4' : h.stars >= 3 ? 'nyaman bintang 3' : 'ekonomis';
-      const priceRange = h.price_idr < 500000 ? 'terjangkau' : h.price_idr < 1500000 ? 'menengah' : h.price_idr < 5000000 ? 'premium' : 'mewah eksklusif';
+      const priceRange = h.price_idr == null ? 'menengah' : h.price_idr < 500000 ? 'terjangkau' : h.price_idr < 1500000 ? 'menengah' : h.price_idr < 5000000 ? 'premium' : 'mewah eksklusif';
 
       const summaryVariants = [
         `${esc(h.name)} merupakan pilihan akomodasi ${starLevel} di ${esc(loc)} yang menawarkan keseimbangan sempurna antara kenyamanan dan nilai. Dengan rating ${h.rating || 4.0} dari tamu sebelumnya, hotel ini menjadi salah satu destinasi menginap yang banyak direkomendasikan. Berdasarkan data yang tersedia, ${esc(h.name)} menyediakan ${am.slice(0, 3).join(', ')} sebagai fasilitas utama yang dapat dinikmati oleh setiap tamu. Lokasinya yang strategis menjadikan hotel ini mudah dijangkau dari berbagai titik penting di ${esc(h.city_name || h.city)}. Umumnya hotel di kawasan ini menawarkan pengalaman menginap yang otentik dengan sentuhan keramahtamahan lokal. Dengan rentang harga ${priceRange}, ${esc(h.name)} cocok untuk wisatawan yang mencari kualitas tanpa mengorbankan anggaran. Reservasi dapat dilakukan dengan mudah melalui mitra booking terpercaya kami.`,
@@ -369,7 +377,7 @@ Sitemap: ${SITE}/sitemap.xml
       let similarHotels = [];
       try {
         const s = await pool.query('SELECT name, slug, stars, rating, price_idr, image FROM hotels h JOIN cities c ON c.id = h.city_id WHERE h.stars = $1 AND c.country_code = $2 AND h.id <> $3 ORDER BY h.rating DESC NULLS LAST LIMIT 4', [h.stars || 4, h.country_code, h.id]);
-        similarHotels = s.rows;
+        similarHotels = s.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       } catch (e) { /* ignore */ }
 const body = `
 <div class="crumbs"><a href="/hotels">Beranda</a> › ${h.country_slug ? `<a href="/hotels/${h.country_slug}">${esc(h.country_name)}</a>` : ''} › ${cityPath ? `<a href="${cityPath}">${esc(h.city_name || h.city)}</a>` : ''} › <b>${esc(h.name)}</b></div>
@@ -383,7 +391,7 @@ const body = `
       <h1>${esc(h.name)} — Hotel ${starLevel} di ${esc(loc)}</h1>
       <div class="addr">📍 ${esc(loc)}${h.address ? ' — ' + esc(h.address) : ''}</div>
       <div class="tags">${am.map(a => `<span class="tag">${esc(a)}</span>`).join('')}</div>
-      <div class="price">💵 Harga mulai: <b>${price}</b> / malam</div>
+      ${hasPrice ? `<div class="price">💵 Harga mulai: <b>${price}</b> / malam</div>` : ''}
       
       <div class="ctas">
         <a class="cta cta-primary" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking.com — Pesan Sekarang</a>
@@ -792,9 +800,13 @@ const body = `
         WHERE h.slug = $1`, [slug]);
       if (!rows.length) return res.status(404).send(shell({ title: 'Hotel not found - MyTriv Hotels', desc: 'Hotel not found', canonical: SITE + req.path, ogImage: hotelImage({}, 800), body: '<div class="wrap"><h1>Hotel not found</h1></div>', lang: 'en' }));
       const h = rows[0];
+      h.stars = sanStars(h.stars);
+      h.rating = sanRating(h.rating);
+      h.price_idr = sanPrice(h.price_idr);
       track(req, 'page_views', { lang: 'en' });
       const am = amenities(h);
       const price = fmtPrice(h.price_idr);
+      const hasPrice = h.price_idr != null;
       const links = partnerLinks(generatePartnerLink, h, h.city_name);
       const loc = h.city_name || h.city || h.country_name || '';
       const cityPath = h.country_slug ? '/en/hotels/' + h.country_slug + '/' + (h.city_slug || slugify(h.city_name || h.city)) : null;
@@ -803,13 +815,13 @@ const body = `
       let nearby = [];
       if (h.city_id) {
         const n = await pool.query('SELECT name, slug, stars, rating, price_idr, image FROM hotels WHERE city_id = $1 AND slug <> $2 ORDER BY rating DESC NULLS LAST LIMIT 6', [h.city_id, slug]);
-        nearby = n.rows;
+        nearby = n.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       }
 
       function hashHotel(id) { let hh = 5381; for (let cc of String(id)) hh = ((hh << 5) + hh + cc.charCodeAt(0)) >>> 0; return hh; }
       const hv = hashHotel(h.id);
       const starLevel = h.stars >= 5 ? 'luxury 5-star' : h.stars >= 4 ? 'premium 4-star' : h.stars >= 3 ? 'comfortable 3-star' : 'budget-friendly';
-      const priceRange = h.price_idr < 500000 ? 'affordable' : h.price_idr < 1500000 ? 'mid-range' : h.price_idr < 5000000 ? 'premium' : 'luxury';
+      const priceRange = h.price_idr == null ? 'mid-range' : h.price_idr < 500000 ? 'affordable' : h.price_idr < 1500000 ? 'mid-range' : h.price_idr < 5000000 ? 'premium' : 'luxury';
 
       const summaryVars = [
         `${esc(h.name)} is a ${starLevel} accommodation in ${esc(loc)} offering an excellent balance of comfort and value. With a rating of ${h.rating || 4.0}, this hotel is highly recommended by previous guests. Located in a strategic area, it provides easy access to key destinations in ${esc(h.city_name || h.city)}.`,
@@ -828,7 +840,7 @@ const body = `
       let similarHotels = [];
       try {
         const s = await pool.query('SELECT name, slug, stars, rating, price_idr, image FROM hotels h JOIN cities c ON c.id = h.city_id WHERE h.stars = $1 AND c.country_code = $2 AND h.id <> $3 ORDER BY h.rating DESC NULLS LAST LIMIT 4', [h.stars || 4, h.country_code, h.id]);
-        similarHotels = s.rows;
+        similarHotels = s.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       } catch(e) {}
 
       const title = h.name + ' — Best Price & Booking ' + loc + ' | MyTriv Hotels';
@@ -844,12 +856,12 @@ const body = `
 
       // English body template (compact version)
       const body = '<nav class="crumbs"><ol><li><a href="/hotels">Home</a></li>' + (h.country_slug ? '<li><a href="/en/hotels/' + h.country_slug + '">' + esc(h.country_name) + '</a></li>' : '') + (cityPath ? '<li><a href="' + cityPath + '">' + esc(h.city_name || h.city) + '</a></li>' : '') + '<li><span>' + esc(h.name) + '</span></li></ol></nav>' +
-      '<div class="wrap"><div class="hcard"><img src="' + ogImage + '" alt="' + esc(h.name) + '" width="800" height="320"><div class="hbody"><div class="stars">' + '★'.repeat(h.stars || 4) + ' <span>' + starLevel + '</span></div><h1>' + esc(h.name) + '</h1><p class="addr">📍 ' + esc(loc) + '</p><div class="tags">' + am.map(function(a){ return '<span>' + esc(a) + '</span>'; }).join('') + '</div><div class="price-big">💵 From <strong>' + price + '</strong> / night</div>' +
+      '<div class="wrap"><div class="hcard"><img src="' + ogImage + '" alt="' + esc(h.name) + '" width="800" height="320"><div class="hbody"><div class="stars">' + '★'.repeat(h.stars || 4) + ' <span>' + starLevel + '</span></div><h1>' + esc(h.name) + '</h1><p class="addr">📍 ' + esc(loc) + '</p><div class="tags">' + am.map(function(a){ return '<span>' + esc(a) + '</span>'; }).join('') + '</div>' + (hasPrice ? '<div class="price-big">💵 From <strong>' + price + '</strong> / night</div>' : '') +
       '<div class="ctas"><a class="cta cta-primary" href="/go?u=' + encodeURIComponent(links.booking) + '&partner=booking&slug=' + encodeURIComponent(slug) + '&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking.com</a><a class="cta cta-alt" href="/go?u=' + encodeURIComponent(links.agoda) + '&partner=agoda&slug=' + encodeURIComponent(slug) + '&hotel=1" target="_blank" rel="nofollow noopener">🟠 Agoda</a><a class="cta cta-alt" href="/go?u=' + encodeURIComponent(links.expedia) + '&partner=expedia&slug=' + encodeURIComponent(slug) + '&hotel=1" target="_blank" rel="nofollow noopener">🟡 Expedia</a></div></div></div>' +
       '<section class="sec"><h2>🏨 Why Choose ' + esc(h.name) + '?</h2><p>' + summaryText + '</p></section>' +
       '<section class="sec"><h2>⭐ Highlights</h2><div class="highlight-grid">' + whyPoints.map(function(p){ return '<div class="hl-item">⭐ ' + p[0] + '</div>'; }).join('') + '</div></section>' +
       '<section class="sec"><h2>❓ FAQ — ' + esc(h.name) + '</h2><div class="faq">' +
-      '<details><summary>What is the price at ' + esc(h.name) + '?</summary><p>Rates start from ' + price + '/night. Compare prices across 8 OTAs above for the best deal.</p></details>' +
+      '<details><summary>What is the price at ' + esc(h.name) + '?</summary><p>' + (hasPrice ? 'Rates start from ' + price + '/night. ' : 'Prices vary by season and booking channel. ') + 'Compare prices across 8 OTAs above for the best deal.</p></details>' +
       '<details><summary>Where is ' + esc(h.name) + ' located?</summary><p>The hotel is located in ' + esc(loc) + '. Check our interactive map for exact position.</p></details>' +
       '<details><summary>How do I book ' + esc(h.name) + '?</summary><p>Click any OTA button above. You will be redirected to the official partner site with no extra fees.</p></details>' +
       '<details><summary>What facilities are available?</summary><p>Facilities include ' + am.join(', ') + '.</p></details>' +
@@ -873,6 +885,7 @@ const body = `
       const cities = await pool.query('SELECT name, slug, hotel_count, lat, lng FROM cities WHERE country_code = $1 AND hotel_count > 0 ORDER BY hotel_count DESC, population DESC NULLS LAST LIMIT 60', [c.code]);
       const hotels = await pool.query(`SELECT h.name, h.slug, h.stars, h.rating, h.price_idr, h.image, c.name AS city_name FROM hotels h JOIN cities c ON c.id = h.city_id WHERE c.country_code = $1 ORDER BY h.rating DESC NULLS LAST LIMIT 12`, [c.code]);
       const totalHotels = await pool.query('SELECT count(*) FROM hotels h JOIN cities c ON c.id = h.city_id WHERE c.country_code = $1', [c.code]);
+      hotels.rows = hotels.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
 
       const title = `Hotel di ${c.name} — ${totalHotels.rows[0].count} Hotel Terbaik | MyTriv Hotels`;
       const desc = `Cari hotel terbaik di ${c.name}. ${cities.rows.length} kota dengan hotel murah & mewah. Bandingkan harga Booking.com, Agoda, Trip.com & Traveloka.`;
@@ -933,12 +946,13 @@ const body = `
           SELECT h.* FROM hotels h JOIN cities c ON c.id = h.city_id
           WHERE c.id = $1 ORDER BY h.rating DESC NULLS LAST, h.reviews DESC NULLS LAST LIMIT 300`, [c.id]);
       }
+      hotels.rows = hotels.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       const totalCount = totalRes.rows[0].n;
       const budget = hotels.rows.slice().sort((a, b) => a.price_idr - b.price_idr)[0];
       const lux = hotels.rows.slice().sort((a, b) => b.price_idr - a.price_idr)[0];
 
       const title = `Hotel di ${c.name}, ${c.country_name} — ${totalCount} Hotel Terbaik | MyTriv Hotels`;
-      const desc = `Temukan ${totalCount} hotel terbaik di ${c.name}${budget ? `, mulai ${fmtPrice(budget.price_idr)}` : ''}. Bandingkan harga & booking online di Booking.com, Agoda, Trip.com, Traveloka.`;
+      const desc = `Temukan ${totalCount} hotel terbaik di ${c.name}${budget && budget.price_idr != null ? `, mulai ${fmtPrice(budget.price_idr)}` : ''}. Bandingkan harga & booking online di Booking.com, Agoda, Trip.com, Traveloka.`;
       const body = `
 <div class="crumbs"><a href="/hotels">Beranda</a> › <a href="/hotels/${country}">${esc(c.country_name)}</a> › <b>${esc(c.name)}</b></div>
 <div class="hero"><h1>Hotel di ${esc(c.name)}</h1><p>${desc}</p></div>
@@ -954,7 +968,7 @@ const body = `
   <h2>Tips wisata ${esc(c.name)}</h2>
   <div class="faq">
     <details><summary>Kapan waktu terbaik ke ${esc(c.name)}?</summary><p>Cek musim wisata dan event lokal untuk memilih waktu terbaik. Harga hotel umumnya lebih murah di musim sepi.</p></details>
-    <details><summary>Hotel apa yang paling murah di ${esc(c.name)}?</summary><p>${budget ? `Hotel mulai dari ${fmtPrice(budget.price_idr)}.` : 'Cek daftar di atas untuk pilihan budget.'} Bandingkan di Booking.com dan Agoda untuk penawaran terbaik.</p></details>
+    <details><summary>Hotel apa yang paling murah di ${esc(c.name)}?</summary><p>${budget && budget.price_idr != null ? `Hotel mulai dari ${fmtPrice(budget.price_idr)}.` : 'Cek daftar di atas untuk pilihan budget.'} Bandingkan di Booking.com dan Agoda untuk penawaran terbaik.</p></details>
   </div>
 </div>`;
       const schema = { '@context': 'https://schema.org', '@type': 'City', name: c.name, url: SITE + '/hotels/' + country + '/' + city };
