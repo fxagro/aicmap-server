@@ -2062,6 +2062,40 @@ app.post('/api/admin/reviews/:id/status', adminOnly, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ============ USER POI (Community Map Markers) ============
+app.get('/api/maps/poi', async (req, res) => {
+  try {
+    const { city } = req.query;
+    if (!city) return res.status(400).json({ error: 'city required' });
+    const rows = await pool.query(
+      'SELECT id, user_name, name, lat, lng, category, notes, likes, created_at FROM user_pois WHERE LOWER(city)=LOWER($1) ORDER BY likes DESC, created_at DESC LIMIT 200',
+      [city]
+    );
+    res.json({ pois: rows.rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/maps/poi', async (req, res) => {
+  try {
+    const { email, name, lat, lng, city, category, notes } = req.body || {};
+    if (!email || !name || !lat || !lng || !city) return res.status(400).json({ error: 'email, name, lat, lng, city required' });
+    if (!req.user || req.user.email !== email.trim().toLowerCase()) return res.status(401).json({ error: 'Login required' });
+    const r = await pool.query(
+      'INSERT INTO user_pois(user_email, user_name, city, name, lat, lng, category, notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, created_at',
+      [email.trim().toLowerCase(), req.user.name || email.split('@')[0], city, name.trim(), lat, lng, category || 'Lainnya', notes || '']
+    );
+    res.json({ ok: true, id: r.rows[0].id, message: '📍 Lokasi berhasil ditambahkan ke peta!' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/maps/poi/:id/like', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('UPDATE user_pois SET likes=likes+1 WHERE id=$1', [id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 const createSeoRouter = require('./seo');
 app.use(createSeoRouter({ pool, generatePartnerLink: generateTravelpayoutsPartnerLink }));
 
