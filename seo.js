@@ -80,7 +80,7 @@ function fmtPrice(idr) {
 
 function hotelImage(h, w = 800) {
   if (h.image) return h.image;
-  return hotelImgUrl((h.id || '') + '|' + (h.name || ''));
+  return hotelImgUrl((h.city || h.city_name || '') + '|' + (h.country || h.country_name || ''));
 }
 
 function amenities(h) {
@@ -245,8 +245,8 @@ footer a{color:var(--cy)}
 ${user ? `<a href="/auth/logout?redirect=${backPath}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">👤 ${esc(user.name || user.email)} · Keluar</a>` : `<a href="/auth/login?redirect=${backPath}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">🔐 Masuk</a>`}
 </nav></header>
 ${body}
-<footer style="padding:32px 24px;border-top:1px solid var(--border);margin-top:40px;color:var(--mut);font-size:13px;line-height:2;"><div style="max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;"><div><strong style="color:var(--txt);">Top Countries</strong><br><a href="/hotels/indonesia">Indonesia</a><br><a href="/hotels/thailand">Thailand</a><br><a href="/hotels/japan">Japan</a><br><a href="/hotels/singapore">Singapore</a><br><a href="/hotels/malaysia">Malaysia</a></div><div><strong style="color:var(--txt);">Popular Cities</strong><br><a href="/hotels/indonesia/bali">Bali</a><br><a href="/hotels/thailand/bangkok">Bangkok</a><br><a href="/hotels/japan/tokyo">Tokyo</a><br><a href="/hotels/france/paris">Paris</a><br><a href="/hotels/united-kingdom/london">London</a></div><div><strong style="color:var(--txt);">MyTriv</strong><br><a href="/hotels/">Peta Interaktif</a><br><a href="/book/">Booking</a><br><a href="/hotels/about.html">Panduan Monopoly</a><br><a href="/hotels/">190+ Negara</a></div><div><strong style="color:var(--txt);">Partners</strong><br><span>Booking · Agoda · Trip<br>Traveloka · Expedia<br>Hotels.com · Kayak · Klook</span></div></div><p style="text-align:center;margin-top:20px;">MyTriv Hotels — 120.000+ hotel di 190+ negara. Bandingkan 8 OTA. Virtual Monopoly.</p><p style="text-align:center;font-size:11px;">© 2026 MyTriv · Harga estimasi</p> Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka, Expedia).</p>
-<p><a href="/sitemap.xml">Sitemap</a> · <a href="/hotels">Peta Interaktif</a> · © 2026 MyTriv</p></footer>
+<footer style="padding:32px 24px;border-top:1px solid var(--border);margin-top:40px;color:var(--mut);font-size:13px;line-height:2;"><div style="max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;"><div><strong style="color:var(--txt);">Top Countries</strong><br><a href="/hotels/indonesia">Indonesia</a><br><a href="/hotels/thailand">Thailand</a><br><a href="/hotels/japan">Japan</a><br><a href="/hotels/singapore">Singapore</a><br><a href="/hotels/malaysia">Malaysia</a></div><div><strong style="color:var(--txt);">Popular Cities</strong><br><a href="/hotels/indonesia/bali">Bali</a><br><a href="/hotels/thailand/bangkok">Bangkok</a><br><a href="/hotels/japan/tokyo">Tokyo</a><br><a href="/hotels/france/paris">Paris</a><br><a href="/hotels/united-kingdom/london">London</a></div><div><strong style="color:var(--txt);">MyTriv</strong><br><a href="/maps/">🗺️ Map Explorer</a><br><a href="/book/">Booking</a><br><a href="/hotels/about.html">Panduan Monopoly</a><br><a href="/hotels/">190+ Negara</a></div><div><strong style="color:var(--txt);">Partners</strong><br><span>Booking · Agoda · Trip<br>Traveloka · Expedia<br>Hotels.com · Kayak · Klook</span></div></div><p style="text-align:center;margin-top:20px;">MyTriv Hotels — 120.000+ hotel di 190+ negara. Bandingkan 8 OTA. Virtual Monopoly.</p><p style="text-align:center;font-size:11px;">© 2026 MyTriv · Harga estimasi</p> Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka, Expedia).</p>
+<p><a href="/sitemap.xml">Sitemap</a> · <a href="/maps">🗺️ Map Explorer</a> · © 2026 MyTriv</p></footer>
 <script>
 (function(){var m=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',m);})();
 function toggleTheme(){var e=document.documentElement;var c=e.getAttribute('data-theme')==='light'?'dark':'light';e.setAttribute('data-theme',c);localStorage.setItem('theme',c);var b=document.getElementById('theme-toggle');if(b)b.innerText=c==='light'?'🌙 Dark':'☀️ Light';}
@@ -518,6 +518,66 @@ Sitemap: ${SITE}/sitemap.xml
         reviewsHtml = reviewSectionHtml(h, slug, 'id', req.user, { count: rvCount, avg: rvAvg }, rvList.rows);
       } catch (e) { /* reviews not ready */ }
       if (rvCount > 0) schema.aggregateRating = { '@type': 'AggregateRating', ratingValue: rvAvg.toFixed(1), reviewCount: rvCount, bestRating: 5, worstRating: 1 };
+
+      // Dynamic POI sections from OSM map data (replaces generic templates)
+      let poiSectionLandmark = '', poiSectionKuliner = '', poiSectionTransport = '', poiSectionBelanja = '';
+      let poiSup = { resto:0, kafe:0, wisata:0, belanja:0, transport:0 };
+      try {
+        const poiRow = await pool.query('SELECT poi_json FROM hotel_pois WHERE hotel_id=$1', [h.id]);
+        if (poiRow.rows.length && poiRow.rows[0].poi_json && poiRow.rows[0].poi_json.poi) {
+          const pois = poiRow.rows[0].poi_json.poi;
+          for (const p of pois) {
+            if (p.cat === 'Restoran') poiSup.resto++;
+            else if (p.cat === 'Kafe') poiSup.kafe++;
+            else if (p.cat === 'Wisata') poiSup.wisata++;
+            else if (p.cat === 'Belanja') poiSup.belanja++;
+            else if (p.cat === 'Transport') poiSup.transport++;
+          }
+          const wisataSorted = pois.filter(p => p.cat === 'Wisata').sort((a,b) => a.dist_m - b.dist_m);
+          const belanjaSorted = pois.filter(p => p.cat === 'Belanja').sort((a,b) => a.dist_m - b.dist_m);
+          const landmarkItems = [...wisataSorted, ...belanjaSorted].slice(0, 15);
+          if (landmarkItems.length) {
+            poiSectionLandmark = `<section class="seo-section">
+    <h2>🗼 Landmark & Tempat Wisata di Sekitar ${esc(h.name)}</h2>
+    <p>Data lokasi real-time: ${poiSup.wisata} tempat wisata (radius 10 km), ${poiSup.belanja} pusat belanja & ${poiSup.kafe + poiSup.resto} pilihan kuliner dalam radius 2.5 km dari ${esc(h.name)}. Berikut yang terdekat:</p>
+    <div class="seo-grid-2">
+      ${landmarkItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} · ${p.cat}</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
+          const kulinerItems = pois.filter(p => p.cat === 'Restoran' || p.cat === 'Kafe').sort((a,b) => a.dist_m - b.dist_m).slice(0, 12);
+          if (kulinerItems.length) {
+            poiSectionKuliner = `<section class="seo-section">
+    <h2>🍽️ Pilihan Kuliner di Sekitar ${esc(h.name)}</h2>
+    <p>Dalam radius 2.5 km terdapat ${poiSup.resto} restoran dan ${poiSup.kafe} kafe. Berdasarkan data lokasi real-time, berikut pilihan terdekat:</p>
+    <div class="seo-grid-3">
+      ${kulinerItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} · ${p.cat}</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
+          const transportItems = pois.filter(p => p.cat === 'Transport').sort((a,b) => a.dist_m - b.dist_m).slice(0, 8);
+          if (transportItems.length) {
+            poiSectionTransport = `<section class="seo-section">
+    <h2>🚗 Transportasi & Akses di Sekitar ${esc(h.name)}</h2>
+    <p>Terdapat ${poiSup.transport} titik transportasi dalam radius 2.5 km dari ${esc(h.name)}:</p>
+    <div class="seo-grid-2">
+      ${transportItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} dari hotel</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
+          const belanjaItems = pois.filter(p => p.cat === 'Belanja').sort((a,b) => a.dist_m - b.dist_m).slice(0, 12);
+          if (belanjaItems.length) {
+            poiSectionBelanja = `<section class="seo-section">
+    <h2>🛍️ Pusat Belanja & Fasilitas di Sekitar ${esc(h.name)}</h2>
+    <p>Terdapat ${poiSup.belanja} pusat belanja, ATM, dan minimarket dalam radius 2.5 km dari ${esc(h.name)}:</p>
+    <div class="seo-grid-2">
+      ${belanjaItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} · ${p.cat}</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
+        }
+      } catch (e) { /* no POI cache yet */ }
+
 const body = `
 <div class="crumbs"><a href="/hotels">Beranda</a> › ${h.country_slug ? `<a href="/hotels/${h.country_slug}">${esc(h.country_name)}</a>` : ''} › ${cityPath ? `<a href="${cityPath}">${esc(h.city_name || h.city)}</a>` : ''} › <b>${esc(h.name)}</b></div>
 <div class="wrap">
@@ -594,7 +654,8 @@ const body = `
     <p>${esc(h.name)} berlokasi di kawasan ${esc(h.city_name || h.city)}, ${esc(h.country_name || h.country)}${h.lat ? ` (koordinat GPS ${Number(h.lat).toFixed(4)}, ${Number(h.lng).toFixed(4)})` : ''}. Berdasarkan informasi yang tersedia, hotel ini berada di area yang mudah dijangkau dari berbagai titik penting kota. ${h.address ? 'Alamat lengkap: ' + esc(h.address) + '.' : ''} Umumnya hotel di kawasan ${esc(h.city_name || h.city)} menawarkan akses cepat ke pusat perbelanjaan, restoran, dan tempat wisata utama.</p>
   </section>
 
-  <!-- 7. LANDMARK TERDEKAT -->
+  ${poiSectionLandmark}
+  <!-- 7. LANDMARK TERDEKAT (generik) -->
   <section class="seo-section">
     <h2>🗼 Landmark & Tempat Wisata Terdekat</h2>
     <p>Berdasarkan lokasi ${esc(h.name)} di ${esc(h.city_name || h.city)}, berikut beberapa landmark dan tempat wisata yang umumnya berada di sekitar kawasan ini:</p>
@@ -608,7 +669,8 @@ const body = `
     </div>
   </section>
 
-  <!-- 8. RESTORAN TERDEKAT -->
+  ${poiSectionKuliner}
+  <!-- 8. RESTORAN TERDEKAT (generik) -->
   <section class="seo-section">
     <h2>🍽️ Pilihan Kuliner di Sekitar ${esc(h.name)}</h2>
     <p>Kawasan ${esc(h.city_name || h.city)} dikenal dengan keragaman kulinernya. Di sekitar ${esc(h.name)}, umumnya tersedia berbagai pilihan restoran mulai dari masakan lokal ${esc(h.country_name || 'Internasional')} hingga internasional. Beberapa pilihan populer yang bisa Anda temukan:</p>
@@ -622,7 +684,9 @@ const body = `
     </div>
   </section>
 
-  <!-- 9. TRANSPORTASI -->
+  ${poiSectionBelanja}
+  ${poiSectionTransport}
+  <!-- 9. TRANSPORTASI (generik) -->
   <section class="seo-section">
     <h2>🚗 Akses Transportasi ke ${esc(h.name)}</h2>
     <p>${esc(h.name)} mudah dijangkau melalui berbagai moda transportasi. Berdasarkan lokasi di ${esc(loc)}, tamu dapat menggunakan:</p>
@@ -818,7 +882,7 @@ const body = `
     var css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
     var js=document.createElement('script');js.src='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
     js.onload=function(){
-    var map=new maplibregl.Map({container:'hotel-map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lng,lat],zoom:15});
+    var map=new maplibregl.Map({container:'hotel-map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lng,lat],zoom:16});
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
     var el=document.createElement('div');el.className='poi-dot hotel-dot';el.textContent='🏨';
     new maplibregl.Marker({element:el}).setLngLat([lng,lat]).setPopup(new maplibregl.Popup({offset:12}).setHTML('<b>'+esc2(NAME)+'</b><br>'+esc2(LOC))).addTo(map);
@@ -843,6 +907,7 @@ const body = `
     })();
     </script>
     <p style="color:var(--mut);font-size:12px;margin-top:8px;">📍 Koordinat: ${Number(h.lat||0).toFixed(4)}, ${Number(h.lng||0).toFixed(4)} — ${esc(loc)} · Peta © OpenFreeMap · POI © OpenStreetMap</p>
+    <a href="/maps/${slugify(h.city_name || h.city || '')}" class="cta cta-alt" style="display:inline-block;margin-top:10px;font-size:13px;padding:8px 16px;">🗺️ Jelajahi Semua Hotel di ${esc(h.city_name || h.city)} — Map Explorer →</a>
   </section>
   <!-- ═══ WALKING DISTANCE ═══ -->
   <section class="seo-section">
@@ -1278,7 +1343,7 @@ const body = `
     var css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
     var js=document.createElement('script');js.src='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
     js.onload=function(){
-    var map=new maplibregl.Map({container:'hotel-map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lng,lat],zoom:15});
+    var map=new maplibregl.Map({container:'hotel-map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lng,lat],zoom:16});
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
     var el=document.createElement('div');el.className='poi-dot hotel-dot';el.textContent='🏨';
     new maplibregl.Marker({element:el}).setLngLat([lng,lat]).setPopup(new maplibregl.Popup({offset:12}).setHTML('<b>'+esc2(NAME)+'</b><br>'+esc2(LOC))).addTo(map);
@@ -1303,6 +1368,7 @@ const body = `
     })();
     </script>
     <p style="color:var(--mut);font-size:12px;margin-top:8px;">📍 Coordinates: ${Number(h.lat||0).toFixed(4)}, ${Number(h.lng||0).toFixed(4)} — ${esc(loc)} · Map © OpenFreeMap · POI © OpenStreetMap</p>
+    <a href="/maps/${slugify(h.city_name || h.city || '')}" class="cta cta-alt" style="display:inline-block;margin-top:10px;font-size:13px;padding:8px 16px;">🗺️ Explore All Hotels in ${esc(h.city_name || h.city)} — Map Explorer →</a>
   </section>
 
   <section class="seo-section">
@@ -1537,6 +1603,101 @@ loadReviews('pending');
 <\/script>`;
     res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
     res.send(shell({ title: 'Review Moderation - MyTriv', desc: 'Approve or reject guest reviews', canonical: SITE + '/admin/reviews', ogImage: hotelImage({}, 800), body, user: req.user }));
+  });
+
+  // ============ MAP EXPLORER ============
+  router.get('/maps/:city', async (req, res) => {
+    try {
+      const city = req.params.city.replace(/-/g,' ').replace(/bandung/,'Bandung').replace(/jakarta/,'Jakarta').replace(/yogyakarta/,'Yogyakarta').replace(/bali/,'Bali');
+      const lang = city === req.params.city ? 'id' : 'id'; // keep simple
+      const cRes = await pool.query(
+        "SELECT id, name, slug, city, lat, lng, stars, rating, price_idr, image FROM hotels WHERE LOWER(city)=LOWER($1) AND lat IS NOT NULL AND lng IS NOT NULL AND country='Indonesia' ORDER BY rating DESC NULLS LAST LIMIT 500",
+        [city]
+      );
+      if (!cRes.rows.length) {
+        return res.status(404).send(shell({ title: 'City Not Found', desc: 'No hotels found for this city', canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: '<p>City not found</p>' }));
+      }
+      const hotels = cRes.rows;
+      const avgLat = hotels.reduce((s,h) => s + Number(h.lat), 0) / hotels.length;
+      const avgLng = hotels.reduce((s,h) => s + Number(h.lng), 0) / hotels.length;
+      
+      const hotelsJson = JSON.stringify(hotels.map(h => ({
+        id: h.id, name: h.name, slug: h.slug, lat: h.lat, lng: h.lng,
+        stars: h.stars || 4, rating: h.rating, price: h.price_idr
+      })));
+      
+      const title = `Peta Interaktif Hotel di ${city.charAt(0).toUpperCase()+city.slice(1)} — MyTriv Maps`;
+      const desc = `Jelajahi ${hotels.length} hotel di ${city} dengan peta interaktif. Filter berdasarkan rating, harga, dan kategori. Bandingkan harga Booking.com, Agoda, Traveloka.`;
+      
+      const mapHtml = `
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6e6e6;overflow:hidden;height:100vh}
+  #map{width:100%;height:100%}
+  #sidebar{position:fixed;top:12px;left:12px;z-index:1000;background:rgba(13,17,23,.95);backdrop-filter:blur(10px);border:1px solid #30363d;border-radius:12px;padding:14px;max-width:340px;width:320px;max-height:calc(100vh-24px);overflow-y:auto;font-size:13px}
+  #sidebar h1{font-size:18px;margin:0 0 4px;color:#58a6ff}
+  #sidebar .sub{color:#8b949e;font-size:12px;margin-bottom:12px}
+  #sidebar .stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  #sidebar .stat{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:6px 10px;font-size:11px}
+  #sidebar .stat b{color:#58a6ff}
+  #sidebar button{display:block;width:100%;padding:8px;margin:3px 0;background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;cursor:pointer;font-size:12px;text-align:left}
+  #sidebar button:hover{background:#30363d;color:#58a6ff}
+  #sidebar button.active{background:#1f6feb;color:#fff;border-color:#58a6ff}
+  #hotel-list{margin-top:8px;max-height:300px;overflow-y:auto}
+  #hotel-list a{display:block;padding:6px 8px;color:#c9d1d9;text-decoration:none;border-radius:4px;font-size:12px}
+  #hotel-list a:hover{background:#21262d;color:#58a6ff}
+  .maplibregl-popup{max-width:260px!important}
+  .maplibregl-popup-content{background:#161b22!important;color:#e6e6e6!important;border:1px solid #30363d!important;border-radius:10px!important;padding:12px!important;font-size:12px}
+  .maplibregl-popup-content h3{margin:0 0 4px;font-size:14px;color:#58a6ff}
+  .maplibregl-popup-content .stars{color:#f0c040}
+  .maplibregl-popup-content a{color:#58a6ff}
+</style>
+<div id="map"></div>
+<div id="sidebar">
+  <h1>🏨 Hotel di ${esc(city)}</h1>
+  <div class="sub">${hotels.length} hotel — MyTriv Maps Explorer</div>
+  <div class="stats">
+    <div class="stat">⭐ <b>${(hotels.reduce((s,h)=>s+(h.rating||4),0)/hotels.length).toFixed(1)}</b> avg rating</div>
+    <div class="stat">💰 <b>${hotels.filter(h=>h.price_idr<800000).length}</b> budget</div>
+    <div class="stat">🌟 <b>${hotels.filter(h=>(h.stars||4)>=4).length}</b> premium</div>
+  </div>
+  <button onclick="filterAll()" class="active" id="btn-all">📍 Semua Hotel (${hotels.length})</button>
+  <button onclick="filterBy('premium')" id="btn-premium">🌟 Premium (4-5 bintang)</button>
+  <button onclick="filterBy('budget')" id="btn-budget">💰 Budget (<800rb)</button>
+  <div id="hotel-list">${hotels.slice(0,20).map(h=>`<a href="/hotel/${h.slug}" target="_blank">⭐${h.stars||4} ${esc(h.name).slice(0,28)}</a>`).join('')}</div>
+</div>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+const HOTELS=${hotelsJson};
+let activeFilter='all';
+const map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:[${avgLng},${avgLat}],zoom:14});
+map.addControl(new maplibregl.NavigationControl(),'top-right');
+const markers=[];
+function renderMarkers(filter){
+  markers.forEach(m=>m.remove()); markers.length=0;
+  HOTELS.forEach(h=>{
+    let show=filter==='all'||(filter==='premium'&&h.stars>=4)||(filter==='budget'&&h.price&&h.price<800000);
+    if(!show)return;
+    const el=document.createElement('div');
+    el.style.cssText='width:'+(filter==='all'?18:22)+'px;height:'+(filter==='all'?18:22)+'px;background:'+(h.stars>=4?'#f0c040':'#58a6ff')+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.6);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:bold';
+    el.textContent=h.stars>=5?'5':h.stars>=4?'4':'';
+    const m=new maplibregl.Marker({element:el}).setLngLat([h.lng,h.lat])
+      .setPopup(new maplibregl.Popup().setHTML('<h3>'+h.name+'</h3><div class=\\"stars\\">'+'★'.repeat(h.stars>=5?5:h.stars>=4?4:3)+' '+(h.rating||4)+'/5</div>'+(h.price?'<div>from Rp '+(h.price/1000000).toFixed(1)+' jt</div>':'')+'<a href=\\"/hotel/'+h.slug+'\\">Lihat Detail & Booking →</a>'))
+      .addTo(map);
+    markers.push(m);
+  });
+  document.querySelectorAll('#sidebar button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('btn-'+(filter==='all'?'all':filter==='premium'?'premium':'budget')).classList.add('active');
+}
+function filterAll(){activeFilter='all';renderMarkers('all');}
+function filterBy(f){activeFilter=f;renderMarkers(f);}
+renderMarkers('all');
+</script>`;
+      res.send(shell({ title, desc, canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: mapHtml }));
+    } catch (e) {
+      res.status(500).send(shell({ title: 'Error', desc: 'Server error', canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: '<p>Error loading map</p>' }));
+    }
   });
 
   return router;
