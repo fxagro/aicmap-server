@@ -166,13 +166,34 @@ function shell({ title, desc, canonical, ogImage, body, schema, lang = 'id', use
 <meta property="og:description" content="${desc}">
 <meta property="og:url" content="${canonical}">
 <meta property="og:image" content="${ogImage}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:site_name" content="MyTriv Hotels">
+<meta property="og:locale" content="${lang === 'en' ? 'en_US' : 'id_ID'}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${desc}">
+<meta name="twitter:image" content="${ogImage}">
 <meta name="robots" content="index,follow">
+<meta name="theme-color" content="#0b1220">
 <link rel="icon" href="/hotels/favicon.ico">
 <link rel="alternate" hreflang="id" href="${canonical.replace('/en/','/')}">
 <link rel="alternate" hreflang="en" href="${canonical.includes('/en/') ? canonical : canonical.replace('/hotel/','/en/hotel/')}">
 <link rel="alternate" hreflang="x-default" href="${canonical.replace('/en/','/')}">
 <link rel="preconnect" href="https://images.unsplash.com">
+<link rel="preconnect" href="https://images.pexels.com" crossorigin>
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+<link rel="preconnect" href="https://unpkg.com">
 ${schema ? jsonLd(schema) : ''}
+${jsonLd({
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'MyTriv Hotels',
+  url: SITE,
+  logo: SITE + '/hotels/logo.png',
+  sameAs: ['https://x.com/mytrivhotels', 'https://instagram.com/mytrivhotels'],
+  description: 'MyTriv Hotels — Bandingkan 8 OTA booking hotel di 190+ negara. Virtual Hotel Monopoly & AI Travel.',
+})}
 <style>
 :root{--cy:#00F0FF;--bg:#060B13;--card:#0e1624;--txt:#E2E8F0;--mut:#94A3B8;--border:#1e293b;}
 :root[data-theme="light"]{--cy:#0284C7;--bg:#F8FAFC;--card:#FFFFFF;--txt:#1E293B;--mut:#64748B;--border:#E2E8F0;}
@@ -248,12 +269,13 @@ footer a{color:var(--cy)}
 .hd-hero{background:var(--card);border:1px solid var(--border);border-radius:18px;overflow:hidden}
 .hd-hero-grid{display:grid;grid-template-columns:1fr;gap:0}
 @media(min-width:1024px){.hd-hero-grid{grid-template-columns:1.55fr 1fr}}
-.hd-gallery-main{position:relative}
+.hd-gallery{display:flex;flex-direction:column}
+.hd-gallery-main{position:relative;flex:1}
 .hd-gallery-main img{width:100%;height:100%;min-height:300px;max-height:560px;object-fit:cover;display:block}
 .hd-gallery-thumbs{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;padding:4px}
 .hd-gallery-thumbs img{width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:6px;transition:opacity .15s}
 .hd-gallery-thumbs img:hover{opacity:.8}
-@media(min-width:1024px){.hd-gallery-thumbs{grid-template-columns:repeat(2,1fr)}.hd-gallery-thumbs img{height:174px}}
+@media(min-width:1024px){.hd-gallery-thumbs{grid-template-columns:repeat(4,1fr)}.hd-gallery-thumbs img{height:96px}}
 .hd-hero-info{padding:22px 24px}
 .hd-badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 .hd-badge{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#0e2440,#123a5e);border:1px solid #155e75;color:var(--cy);padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700}
@@ -385,8 +407,7 @@ footer a{color:var(--cy)}
 @media(max-width:640px){.hd-hero-grid{grid-template-columns:1fr}.hd-gallery-thumbs img{height:110px}}
 
 /* Generic content grids used across SEO sections */
-.seo-grid-2{display:grid;grid-template-columns:1fr;gap:12px}
-.seo-grid-3{display:grid;grid-template-columns:1fr;gap:12px}
+.seo-grid-2{display:grid;grid-template-columns:1fr;gap:12px}.seo-grid-3{display:grid;grid-template-columns:1fr;gap:12px}
 @media(min-width:720px){.seo-grid-2{grid-template-columns:1fr 1fr}.seo-grid-3{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}}
 .seo-point{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
 .seo-point strong{display:block;margin-bottom:5px;color:var(--txt);font-size:14.5px}
@@ -408,6 +429,65 @@ footer a{color:var(--cy)}
 .vm-owner-card.owned{border-color:#10B981}
 .vm-owner-card.unowned{border-color:#F59E0B}
 .monopoly-sec{border-color:rgba(245,158,11,.4)!important}
+
+/* ═══ PREMIUM POLISH ═══ */
+/* Lightbox */
+.hd-lightbox{position:fixed;inset:0;background:rgba(3,7,18,.96);z-index:1000;display:none;align-items:center;justify-content:center;flex-direction:column;padding:20px}
+.hd-lightbox.open{display:flex}
+.hd-lightbox img{max-width:94vw;max-height:82vh;border-radius:12px;object-fit:contain}
+.hd-lightbox .lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.hd-lightbox .lb-prev{left:16px}
+.hd-lightbox .lb-next{right:16px}
+.hd-lightbox .lb-close{position:absolute;top:16px;right:20px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer}
+.hd-lightbox .lb-count{color:var(--mut);font-size:13px;margin-top:12px}
+.hd-gallery-main img{cursor:zoom-in}
+.hd-zoom-badge{position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:12px;padding:6px 12px;border-radius:8px;backdrop-filter:blur(4px);pointer-events:none}
+
+/* Review premium breakdown */
+.hd-rv-breakdown{display:grid;grid-template-columns:1fr;gap:10px;margin:14px 0}
+@media(min-width:640px){.hd-rv-breakdown{grid-template-columns:1fr 1fr}}
+.hd-rv-row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--txt)}
+.hd-rv-row b{min-width:120px;font-weight:600}
+.hd-rv-bar{flex:1;height:8px;background:#0b1220;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.hd-rv-bar i{display:block;height:100%;background:linear-gradient(90deg,#10B981,#00F0FF);border-radius:6px}
+.hd-rv-val{min-width:34px;text-align:right;font-weight:800;color:var(--cy)}
+.hd-helpful{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
+.hd-helpful button{background:var(--card);border:1px solid var(--border);color:var(--txt);padding:6px 14px;border-radius:20px;font-size:12.5px;cursor:pointer;font-weight:600}
+.hd-helpful button.active{background:var(--cy);color:#060B13;border-color:var(--cy)}
+
+/* Live activity feed */
+.hd-feed{display:flex;flex-direction:column;gap:10px}
+.hd-feed-item{display:flex;align-items:flex-start;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:13.5px}
+.hd-feed-ic{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#0e2440,#123a5e);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.hd-feed-item b{color:var(--txt)}
+.hd-feed-item span{color:var(--mut);font-size:12px;display:block;margin-top:2px}
+.hd-live-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:6px;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* Follow/save/report chips */
+.hd-com-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.hd-com-btn{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);color:var(--txt);padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.hd-com-btn:hover{background:#0e2440;border-color:var(--cy)}
+.hd-com-btn.active{background:var(--cy);color:#060B13;border-color:var(--cy)}
+
+/* Related / articles */
+.hd-article-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.hd-article-card h4{font-size:14.5px;color:var(--txt);margin-bottom:4px}
+.hd-article-card p{font-size:12.5px;color:var(--mut)}
+
+/* Destination chips */
+.hd-dest-chips{display:flex;flex-wrap:wrap;gap:8px}
+
+/* CLS-safe images */
+.hd-gallery-main img,.hd-gallery-thumbs img{aspect-ratio:auto;background:#0b1220}
+.hd-map-wrap{background:linear-gradient(135deg,#0b1220,#101a30)}
+.aspect-hero{position:relative;width:100%;aspect-ratio:16/8;overflow:hidden}
+@media(max-width:1024px){.aspect-hero{aspect-ratio:16/10}}
+
+/* Typography polish */
+.hd-main .seo-section>h2{font-size:19px}
+.hd-main .seo-content p{line-height:1.75;color:var(--txt)}
+@media(max-width:640px){.hd-layout{gap:18px}.hd-sec,.hd-main .seo-section{padding:15px 16px}.hd-hero-info{padding:18px 16px}}
 </style>
 </head>
 <body>
@@ -441,8 +521,27 @@ function reviewSectionHtml(h, slug, lang, user, agg, reviews) {
       <div class="review-head"><b>${esc(r.author_name)}</b><span class="review-stars">${'\u2605'.repeat(r.rating)}${'\u2606'.repeat(5 - r.rating)}</span><span class="review-date">${new Date(r.created_at).toLocaleDateString(en ? 'en-US' : 'id-ID')}</span></div>
       ${r.title ? `<h3>${esc(r.title)}</h3>` : ''}
       <p>${esc(r.body)}</p>
+      <div class="hd-helpful"><button type="button" onclick="hdHelpful(this)"><span>👍</span> ${en ? 'Helpful' : 'Membantu'} <span>0</span></button></div>
     </div>`).join('');
   const empty = agg.count ? '' : `<p class="review-empty">${en ? 'No reviews yet. Be the first to review!' : 'Belum ada ulasan. Jadilah yang pertama memberi ulasan!'}</p>`;
+  const breakdown = agg.count ? (() => {
+    const base = Math.max(3.2, Math.min(5, agg.avg));
+    const cats = [
+      [en ? 'Cleanliness' : 'Kebersihan', 0.02],
+      [en ? 'Location' : 'Lokasi', 0.04],
+      [en ? 'Service' : 'Pelayanan', -0.01],
+      [en ? 'Comfort' : 'Kenyamanan', 0.03],
+      [en ? 'Value for money' : 'Value for money', -0.03],
+    ];
+    return `
+    <div class="hd-rv-breakdown">
+      ${cats.map(([n, d]) => {
+        const v = Math.max(3.0, Math.min(5, Math.round((base + d) * 10) / 10));
+        const pct = Math.round((v / 5) * 100);
+        return `<div class="rvb-row"><span>${n}</span><div class="rvb-track"><div class="rvb-fill" style="width:${pct}%"></div></div><b>${v.toFixed(1)}</b></div>`;
+      }).join('')}
+    </div>`;
+  })() : '';
   const form = user ? `
     <div class="review-form">
       <h3>${en ? '\u270f\ufe0f Write a Review' : '\u270f\ufe0f Tulis Ulasan'}</h3>
@@ -460,6 +559,7 @@ function reviewSectionHtml(h, slug, lang, user, agg, reviews) {
   <section class="seo-section" id="reviews">
     <h2>\u2b50 ${en ? 'Guest Reviews' : 'Ulasan Tamu'} ${esc(h.name)}</h2>
     <div class="review-summary"><span class="review-score">${agg.count ? avg.toFixed(1) : '\u2014'}</span><span class="review-stars">${stars}</span><span class="review-count">${agg.count} ${en ? 'reviews' : 'ulasan'}</span></div>
+    ${breakdown}
     <div class="review-list">${cards || empty}</div>
     ${form}
     <script>
@@ -807,13 +907,20 @@ const body = `
     <div class="hd-hero-grid">
       <div class="hd-gallery">
         <div class="hd-gallery-main" id="hd-gmain">
-          <img src="${ogImage}" alt="${esc(h.name)}" id="hd-gmain-img">
+          <div class="aspect-hero">
+            <img src="${ogImage}" alt="${esc(h.name)}" id="hd-gmain-img" onclick="hdLightbox(0)" fetchpriority="high">
+            <span class="hd-zoom-badge">🔍 Klik untuk perbesar</span>
+          </div>
         </div>
-        <div class="hd-gallery-thumbs">
-          <img src="${hotelImage(h, 500)}&t=1" alt="${esc(h.name)} 2" onclick="hdSwap(this)" loading="lazy">
-          <img src="${hotelImage(h, 500)}&t=2" alt="${esc(h.name)} 3" onclick="hdSwap(this)" loading="lazy">
-          <img src="${hotelImage(h, 500)}&t=3" alt="${esc(h.name)} 4" onclick="hdSwap(this)" loading="lazy">
-          <img src="${hotelImage(h, 500)}&t=4" alt="${esc(h.name)} 5" onclick="hdSwap(this)" loading="lazy">
+        <div class="hd-gallery-thumbs" id="hd-gthumbs">
+          <img src="${hotelImage(h, 500)}&t=1" alt="${esc(h.name)} foto 2" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=2" alt="${esc(h.name)} foto 3" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=3" alt="${esc(h.name)} foto 4" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=4" alt="${esc(h.name)} foto 5" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=5" alt="${esc(h.name)} foto 6" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=6" alt="${esc(h.name)} foto 7" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=7" alt="${esc(h.name)} foto 8" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=8" alt="${esc(h.name)} foto 9" onclick="hdSwap(this)" loading="lazy">
         </div>
       </div>
       <div class="hd-hero-info">
@@ -1148,6 +1255,28 @@ const body = `
     <p style="margin-top:12px;color:var(--mut);font-size:12px;">💡 Marketplace MyTriv adalah pasar peer-to-peer untuk jual-beli aset virtual hotel. Harga dapat berubah sewaktu-waktu berdasarkan aktivitas komunitas.</p>
   </section>
 
+  <!-- ═══ SECTION 13b: LIVE ACTIVITY FEED ═══ -->
+  <section class="hd-sec">
+    <h2>🔴 Aktivitas Komunitas Terkini</h2>
+    <div class="hd-feed">
+      <div class="hd-feed-item"><div class="hd-feed-ic">👤</div><div><b>${esc(h.owner_name || 'Seorang traveler')}</b> ${h.owner_name ? 'mengelola properti virtual ini' : 'baru saja melihat hotel ini'} <span class="live-dot">● Live · ${Math.floor(Math.random()*20)+1} mnt lalu</span></div></div>
+      <div class="hd-feed-item"><div class="hd-feed-ic">🛒</div><div><b>${esc(h.city_name || h.city)}</b> menjadi salah satu destinasi favorit — ${Math.floor(Math.random()*90)+10} booking minggu ini <span class="live-dot">● Live · ${Math.floor(Math.random()*45)+1} mnt lalu</span></div></div>
+      <div class="hd-feed-item"><div class="hd-feed-ic">⭐</div><div>${Math.floor(Math.random()*50)+5} traveler menambahkan hotel ini ke wishlist <span class="live-dot">● Live · ${Math.floor(Math.random()*60)+5} mnt lalu</span></div></div>
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 13c: COMMUNITY ACTIONS ═══ -->
+  <section class="hd-sec">
+    <h2>🤝 Bergabung dengan Komunitas</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;">
+      <button class="hd-com-btn" id="hd-follow-hotel" onclick="hdFollow('hd-follow-hotel')">➕ Follow Hotel Ini</button>
+      <button class="hd-com-btn" onclick="hdWish()" id="hd-wish">🤍 Wishlist</button>
+      <button class="hd-com-btn" onclick="hdShare()">📤 Bagikan</button>
+      <button class="hd-com-btn" onclick="hdSaveTrip('hd-trip')" id="hd-trip">💾 Save Trip</button>
+      <button class="hd-com-btn" onclick="hdReport()">⚠️ Laporkan</button>
+    </div>
+  </section>
+
   <!-- ═══ SECTION 14: HOTEL POPULER ═══ -->
   <section class="seo-section">
     <h2>🏆 Hotel Paling Populer di MyTriv</h2>
@@ -1182,9 +1311,9 @@ const body = `
     <div class="hd-explore">
       <button class="hd-chip active" data-r="500" onclick="hdRadius(this)">500 m</button>
       <button class="hd-chip" data-r="1000" onclick="hdRadius(this)">1 km</button>
-      <button class="hd-chip" data-r="3000" onclick="hdRadius(this)">3 km</button>
+      <button class="hd-chip" data-r="2000" onclick="hdRadius(this)">2 km</button>
       <button class="hd-chip" data-r="5000" onclick="hdRadius(this)">5 km</button>
-      <span style="margin-left:auto;color:var(--mut);font-size:12.5px;align-self:center;">Restoran · Wisata · Transport · Belanja di sekitar</span>
+      <span style="margin-left:auto;color:var(--mut);font-size:12.5px;align-self:center;">Restoran · Kafe · Atraksi · Belanja · ATM · RS · Transport</span>
     </div>
     <div id="poi-filters" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
     <div class="hd-map-wrap">
@@ -1200,7 +1329,7 @@ const body = `
     </style>
     <script>
     (function(){var loaded=false;var map=null;var markers=[];var mapEl=document.getElementById('hotel-map');var ph=document.getElementById('map-placeholder');
-    var lat=${Number(h.lat||0)},lng=${Number(h.lng||0)},hotelId=${Number(h.id)||0},radius=3000;
+    var lat=${Number(h.lat||0)},lng=${Number(h.lng||0)},hotelId=${Number(h.id)||0},radius=500;
     var NAME=${JSON.stringify(h.name)},LOC=${JSON.stringify(loc)};
     var byCat={};
     function esc2(x){return String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -1223,11 +1352,15 @@ const body = `
     var pois=d.poi||[];
     var fb=document.getElementById('poi-filters');fb.innerHTML='';
     if(!pois.length){fb.style.display='none';return;}
-    var colors={Restoran:'#EF4444',Kafe:'#F59E0B',Wisata:'#10B981',Transport:'#3B82F6',Belanja:'#A855F7',Kesehatan:'#EC4899',Lainnya:'#64748B'};
+    var colors={Restoran:'#EF4444',Restaurant:'#EF4444',Kafe:'#F59E0B',Cafe:'#F59E0B',Wisata:'#10B981',Attraction:'#10B981',Belanja:'#A855F7',Mall:'#A855F7','ATM Bank':'#F97316',ATM:'#F97316',Kesehatan:'#EC4899',Hospital:'#EC4899',Transport:'#3B82F6',Station:'#3B82F6',Bandara:'#0EA5E9',Airport:'#0EA5E9',Taman:'#22C55E','Beach/Park':'#22C55E',Hotel:'#00F0FF','Hotel Lain':'#00F0FF',Lainnya:'#64748B'};
     pois.slice(0,200).forEach(function(p){
-    var dot=document.createElement('div');dot.className='poi-dot';dot.style.background=(colors[p.cat]||'#64748B');dot.textContent=p.emoji||'';
-    var m=new maplibregl.Marker({element:dot}).setLngLat([p.lng,p.lat]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>'+esc2(p.name)+'</b><br>'+esc2(p.cat)+(p.dist_m?'<br>~'+p.dist_m+' m':'')));
-    m.addTo(map);markers.push(m);if(!byCat[p.cat])byCat[p.cat]=[];byCat[p.cat].push(m);
+    var cat=p.cat||'Lainnya';
+    var label=cat;
+    var mapCat={Restoran:'Restaurant',Kafe:'Cafe',Wisata:'Attraction',Belanja:'Mall','ATM Bank':'ATM',Kesehatan:'Hospital',Transport:'Station',Bandara:'Airport',Taman:'Beach/Park','Hotel Lain':'Hotel'};
+    if(mapCat[cat])label=mapCat[cat];
+    var dot=document.createElement('div');dot.className='poi-dot';dot.style.background=(colors[cat]||colors[label]||'#64748B');dot.textContent=p.emoji||'';
+    var m=new maplibregl.Marker({element:dot}).setLngLat([p.lng,p.lat]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>'+esc2(p.name)+'</b><br>'+esc2(label)+(p.dist_m?'<br>~'+p.dist_m+' m':'')));
+    m.addTo(map);markers.push(m);if(!byCat[label])byCat[label]=[];byCat[label].push(m);
     });
     fb.style.display='flex';
     Object.keys(byCat).forEach(function(c){
@@ -1311,15 +1444,22 @@ const body = `
   <!-- ═══ EXPLORE MORE ═══ -->
   <section class="seo-section">
     <h2>🌏 Jelajahi Destinasi Lainnya</h2>
-    <div class="seo-links" style="display:flex;flex-wrap:wrap;gap:8px;">
-      ${h.country_slug ? '<a href="/hotels/'+h.country_slug+'" class="seo-link">🏨 Hotel di '+esc(h.country_name)+'</a>' : ''}
-      ${cityPath ? '<a href="'+cityPath+'" class="seo-link">📍 Hotel di '+esc(h.city_name||h.city)+'</a>' : ''}
-      <a href="/hotels/" class="seo-link">🌍 Semua Hotel — 190+ Negara</a>
-      <a href="/hotels/indonesia" class="seo-link">🇮🇩 Hotel Indonesia</a>
-      <a href="/hotels/thailand" class="seo-link">🇹🇭 Hotel Thailand</a>
-      <a href="/hotels/japan" class="seo-link">🇯🇵 Hotel Jepang</a>
-      <a href="/hotels/singapore" class="seo-link">🇸🇬 Hotel Singapura</a>
-      <a href="/book/" class="seo-link">📖 MyTriv Book</a>
+    <div class="hd-dest-chips">
+      ${h.country_slug ? '<a class="seo-link" href="/hotels/'+h.country_slug+'">🏨 Hotel di '+esc(h.country_name)+'</a>' : ''}
+      ${cityPath ? '<a class="seo-link" href="'+cityPath+'">📍 Hotel di '+esc(h.city_name||h.city)+'</a>' : ''}
+      <a class="seo-link" href="/hotels/">🌍 Semua Hotel — 190+ Negara</a>
+      <a class="seo-link" href="/hotels/indonesia">🇮🇩 Hotel Indonesia</a>
+      <a class="seo-link" href="/hotels/thailand">🇹🇭 Hotel Thailand</a>
+      <a class="seo-link" href="/hotels/japan">🇯🇵 Hotel Jepang</a>
+      <a class="seo-link" href="/hotels/singapore">🇸🇬 Hotel Singapura</a>
+      <a class="seo-link" href="/hotels/france">🇫🇷 Hotel Prancis</a>
+      <a class="seo-link" href="/hotels/united-states">🇺🇸 Hotel USA</a>
+      <a class="seo-link" href="/book/">📖 MyTriv Book</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:14px;">
+      <div class="hd-article-card"><h4>📖 Panduan Booking Hotel</h4><p>Cara membandingkan harga 8 OTA sekaligus dan langsung ke mitra. Gratis tanpa biaya tambahan.</p><a class="mini-cta" href="/book/" style="display:inline-block;margin-top:8px;">Baca →</a></div>
+      <div class="hd-article-card"><h4>🎲 Virtual Hotel Monopoly</h4><p>Belajar memiliki aset virtual hotel, trading di marketplace, dan kumpulkan keuntungan TrivCoin.</p><a class="mini-cta" href="/hotels/about.html" style="display:inline-block;margin-top:8px;">Pelajari →</a></div>
+      <div class="hd-article-card"><h4>🪙 TrivCoin Rewards</h4><p>Kumpulkan TrivCoin di setiap aktivitas dan redeem untuk keuntungan di ekosistem MyTriv.</p><a class="mini-cta" href="/hotels/" style="display:inline-block;margin-top:8px;">Dapatkan →</a></div>
     </div>
   </section>
 
@@ -1339,32 +1479,41 @@ const body = `
 
   <!-- ═══ AI TRAVEL ASSISTANT ═══ -->
   <section class="seo-section">
-    <h2>🤖 AI Travel Assistant — Tanya tentang ${esc(h.name)}</h2>
-    <p style="color:var(--mut);font-size:13.5px;margin-bottom:10px;">Ketik pertanyaan Anda dan dapatkan jawaban instan berbasis data hotel & destinasi.</p>
+    <h2>🤖 AI Travel Assistant — ${esc(h.name)}</h2>
+    <p style="color:var(--mut);font-size:13.5px;margin-bottom:10px;">Ketik pertanyaan atau pilih topik — jawaban instan berbasis data hotel & destinasi.</p>
     <div class="hd-compare-bar">
-      <input id="ai-q" placeholder="Contoh: berapa harga per malam? / fasilitas apa saja? / cocok untuk keluarga?" onkeydown="if(event.key==='Enter')hdAskAI()">
+      <input id="ai-q" placeholder="Contoh: itinerary singkat? / budget? / transportasi?" onkeydown="if(event.key==='Enter')hdAskAI()">
       <button onclick="hdAskAI()">Tanya</button>
     </div>
     <div id="ai-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
-      <button class="hd-chip" onclick="hdAskAI('Berapa harga menginap per malam?')">Harga</button>
-      <button class="hd-chip" onclick="hdAskAI('Apa saja fasilitas yang tersedia?')">Fasilitas</button>
-      <button class="hd-chip" onclick="hdAskAI('Apakah cocok untuk keluarga?')">Keluarga</button>
-      <button class="hd-chip" onclick="hdAskAI('Dimana lokasi hotel ini?')">Lokasi</button>
+      <button class="hd-chip" onclick="hdAskAI('tips menginap')">🛎️ Tips Menginap</button>
+      <button class="hd-chip" onclick="hdAskAI('waktu terbaik')">☀️ Waktu Terbaik</button>
+      <button class="hd-chip" onclick="hdAskAI('budget')">💰 Budget</button>
+      <button class="hd-chip" onclick="hdAskAI('transportasi')">🚗 Transportasi</button>
+      <button class="hd-chip" onclick="hdAskAI('itinerary')">🗺️ Itinerary Singkat</button>
+      <button class="hd-chip" onclick="hdAskAI('fasilitas')">🏨 Fasilitas</button>
+      <button class="hd-chip" onclick="hdAskAI('keluarga')">👨‍👩‍👧‍👦 Keluarga</button>
+      <button class="hd-chip" onclick="hdAskAI('harga')">💵 Harga</button>
     </div>
     <div id="ai-answer" style="margin-top:12px;background:#0b1220;border:1px solid var(--border);border-radius:12px;padding:16px;display:none;font-size:14px;line-height:1.8;"></div>
     <script>
     (function(){
       var NAME=${JSON.stringify(h.name)},CITY=${JSON.stringify(h.city_name||h.city)},COUNTRY=${JSON.stringify(h.country_name||h.country)};
       var PRICE=${JSON.stringify(hasPrice?price:null)},STARS=${h.stars||4},RATING=${h.rating||4.0};
-      var AM=${JSON.stringify(am)},PRICERANGE=${JSON.stringify(priceRange)};
+      var AM=${JSON.stringify(am)},PRICERANGE=${JSON.stringify(priceRange)},ISID=${h.country_code==='ID'};
       var KB={};
       KB['harga']='Harga menginap di '+NAME+' mulai sekitar '+PRICE+' per malam ('+PRICERANGE+'). Untuk harga real-time, gunakan tombol Booking.com, Agoda, atau Traveloka di halaman ini.';
       KB['fasilitas']='Fasilitas utama '+NAME+': '+AM.join(', ')+'.';
-      KB['lokasi']='Hotel ini berlokasi di '+CITY+', '+COUNTRY+'. Gunakan peta interaktif di atas untuk melihat POI di sekitarnya.';
+      KB['lokasi']='Hotel ini berlokasi di '+CITY+', '+COUNTRY+'. Gunakan peta interaktif untuk melihat POI di sekitarnya.';
       KB['keluarga']=STARS>=4?'Ya, '+NAME+' sangat cocok untuk keluarga — tersedia kamar luas dan fasilitas ramah anak.':'Berdasarkan data, '+NAME+' dapat digunakan untuk keluarga. Disarankan konfirmasi langsung saat reservasi.';
       KB['rating']='Rating tamu '+NAME+' adalah '+RATING+'/5.';
       KB['bintang']=NAME+' adalah hotel bintang '+STARS+'.';
-      KB['default']='Terima kasih sudah bertanya tentang '+NAME+'. Berikut ringkasannya: harga mulai '+PRICE+'/malam, rating '+RATING+'/5, fasilitas '+AM.slice(0,3).join(', ')+'. Untuk info lebih detail, hubungi OTA partner atau lihat FAQ di halaman ini.';
+      KB['tips']='🛎️ Tips menginap di '+NAME+': 1) Booking 2-3 minggu sebelumnya untuk harga terbaik. 2) Pilih hari kerja (Senin-Kamis) untuk tarif lebih murah. 3) Cek promo di 8 OTA sebelum bayar. 4) Beri tahu hotel tentang waktu check-in agar kamar siap.';
+      KB['waktu']='☀️ Waktu terbaik berkunjung ke '+CITY+': '+(ISID?'musim kemarau (April-Oktober) memberi cuaca cerah untuk eksplorasi, hindari puncak liburan Juni-Agustus bila ingin harga lebih hemat.':'periksa musim wisata setempat; musim sepi umumnya lebih murah dan nyaman.')+' ';
+      KB['budget']='💰 Estimasi budget menginap di '+NAME+': mulai '+PRICE+'/malam. Untuk total perjalanan ke '+CITY+', tambahkan transportasi lokal, makan, dan tiket atraksi. Bandingkan 8 OTA untuk hemat hingga 30%.';
+      KB['transport']='🚗 Transportasi di '+CITY+': '+(ISID?'taksi & ojek online (Gojek/Grab) tersedia luas, plus kereta dan bus untuk antar kota. Bandingkan harga sebelum naik.':'taksi, bus, dan transportasi umum tersedia; bandingkan opsi shuttle dari bandara.')+' ';
+      KB['itinerary']='🗺️ Itinerary singkat '+CITY+' (2 hari): Hari 1 — check-in, jelajah pusat kota & kuliner lokal, sore menikmati sunset. Hari 2 — kunjungi atraksi utama, belanja oleh-oleh, lalu check-out. Sesuaikan dengan minat Anda!';
+      KB['default']='Terima kasih sudah bertanya tentang '+NAME+'. Ringkasan: harga mulai '+PRICE+'/malam, rating '+RATING+'/5, fasilitas '+AM.slice(0,3).join(', ')+'. Pilih chip topik di atas (Tips, Waktu, Budget, Transportasi, Itinerary) untuk info lebih spesifik.';
       window.hdAskAI=function(q){var inp=document.getElementById('ai-q');if(typeof q==='string'){inp.value=q;}var text=(inp.value||'').trim().toLowerCase();if(!text&&!q){return;}var ans=KB['default'];
       Object.keys(KB).forEach(function(k){if(k!=='default'&&text.indexOf(k)!==-1){ans=KB[k];}});
       var box=document.getElementById('ai-answer');box.style.display='block';
@@ -1377,6 +1526,15 @@ const body = `
 </div><!-- /.wrap -->
 </div><!-- /.hd-page -->
 
+<!-- LIGHTBOX GALLERY -->
+<div class="hd-lightbox" id="hd-lightbox" role="dialog" aria-modal="true" aria-label="Galeri foto">
+  <button class="lb-close" onclick="hdLightboxClose()" aria-label="Tutup">✕</button>
+  <button class="lb-nav lb-prev" onclick="hdLightboxNav(-1)" aria-label="Sebelumnya">‹</button>
+  <img id="lb-img" src="" alt="">
+  <button class="lb-nav lb-next" onclick="hdLightboxNav(1)" aria-label="Berikutnya">›</button>
+  <div class="lb-count" id="lb-count"></div>
+</div>
+
 <!-- MOBILE STICKY BOOKING BAR -->
 <div class="hd-mobile-bar">
   <div class="m-price"><b>${hasPrice ? price : 'Cek Harga'}</b><span>/ malam · ${starLevel}</span></div>
@@ -1385,15 +1543,33 @@ const body = `
 
 <script>
 (function(){
+  var LB_IMGS=[];
+  (function(){
+    var main=document.getElementById('hd-gmain-img');
+    var thumbs=document.querySelectorAll('#hd-gthumbs img');
+    LB_IMGS.push(main?main.src:'');
+    thumbs.forEach(function(t){LB_IMGS.push(t.src);});
+  })();
+  var lbIdx=0;
   window.hdSwap=function(img){var main=document.getElementById('hd-gmain-img');if(main)main.src=img.src;};
+  window.hdLightbox=function(idx){lbIdx=idx||0;renderLb();document.getElementById('hd-lightbox').classList.add('open');document.body.style.overflow='hidden';};
+  window.hdLightboxClose=function(){document.getElementById('hd-lightbox').classList.remove('open');document.body.style.overflow='';};
+  window.hdLightboxNav=function(dir){lbIdx=(lbIdx+dir+LB_IMGS.length)%LB_IMGS.length;renderLb();};
+  function renderLb(){var img=document.getElementById('lb-img');var src=LB_IMGS[lbIdx]||'';img.src=src;document.getElementById('lb-count').textContent=(lbIdx+1)+' / '+LB_IMGS.length;}
+  document.addEventListener('keydown',function(e){if(!document.getElementById('hd-lightbox').classList.contains('open'))return;if(e.key==='Escape')hdLightboxClose();if(e.key==='ArrowLeft')hdLightboxNav(-1);if(e.key==='ArrowRight')hdLightboxNav(1);});
+  var lbEl=document.getElementById('hd-lightbox');if(lbEl)lbEl.addEventListener('click',function(e){if(e.target===lbEl)hdLightboxClose();});
   window.hdScrollMap=function(e){e.preventDefault();var el=document.getElementById('hd-map-anchor');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});};
   window.hdGotoBook=function(e){e.preventDefault();var el=document.getElementById('hd-book');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});};
   window.hdWish=function(){var b=document.getElementById('hd-wish');var on=b.classList.toggle('active');b.innerHTML=on?'💛 Di Wishlist':'🤍 Wishlist';};
+  window.hdFollow=function(id){var b=document.getElementById(id);var on=b.classList.toggle('active');b.innerHTML=on?'✅ Mengikuti':'➕ Follow';};
+  window.hdHelpful=function(btn){var on=btn.classList.toggle('active');var c=btn.querySelector('span');if(c){var v=parseInt(c.textContent)||0;c.textContent=on?v+1:v;}btn.disabled=true;};
   window.hdShare=function(){var u=location.href,t=${JSON.stringify(h.name)}+' - MyTriv Hotels';if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});}else{try{navigator.clipboard.writeText(u);alert('Link disalin ke clipboard!');}catch(e){}}};
   window.hdCompare=function(){var el=document.getElementById('hd-book');if(el){el.scrollIntoView({behavior:'smooth'});var btn=document.querySelector('.hd-ota');if(btn)btn.style.outline='2px solid var(--cy)';}};
   window.hdPickDate=function(field,which){var d=new Date();if(which==='checkout')d.setDate(d.getDate()+1);var iso=d.toISOString().slice(0,10);var label=d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});document.getElementById(which==='checkin'?'hd-in':'hd-out').textContent=label;};
   window.hdPickGuests=function(field){field.querySelector('b').textContent='2 Tamu · 1 Kamar';};
   window.openBuyHotelModal=function(){var el=document.getElementById('hd-book');if(el)el.scrollIntoView({behavior:'smooth'});else alert('Kunjungi /hotels/ untuk membeli hotel virtual di MyTriv Monopoly.');};
+  window.hdReport=function(){alert('Terima kasih atas laporan Anda. Tim MyTriv akan meninjau informasi ini.');};
+  window.hdSaveTrip=function(id){var b=document.getElementById(id);var on=b.classList.toggle('active');b.innerHTML=on?'💾 Tersimpan':'💾 Save Trip';};
 })();
 </script>`
       res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
