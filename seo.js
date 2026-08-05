@@ -2531,11 +2531,16 @@ loadReviews('pending');
   #hotel-list{margin-top:8px;max-height:300px;overflow-y:auto}
   #hotel-list a{display:block;padding:6px 8px;color:#c9d1d9;text-decoration:none;border-radius:4px;font-size:12px}
   #hotel-list a:hover{background:#21262d;color:#58a6ff}
-  .maplibregl-popup{max-width:260px!important}
-  .maplibregl-popup-content{background:#161b22!important;color:#e6e6e6!important;border:1px solid #30363d!important;border-radius:10px!important;padding:12px!important;font-size:12px}
-  .maplibregl-popup-content h3{margin:0 0 4px;font-size:14px;color:#58a6ff}
-  .maplibregl-popup-content .stars{color:#f0c040}
-  .maplibregl-popup-content a{color:#58a6ff}
+   .maplibregl-popup{max-width:260px!important}
+   .maplibregl-popup-content{background:#161b22!important;color:#e6e6e6!important;border:1px solid #30363d!important;border-radius:10px!important;padding:12px!important;font-size:12px}
+   .maplibregl-popup-content h3{margin:0 0 4px;font-size:14px;color:#58a6ff}
+   .maplibregl-popup-content .stars{color:#f0c040}
+   .maplibregl-popup-content a{color:#58a6ff}
+   .hd-chat-fab,.hd-chat-bubble{z-index:2500}
+   .hd-chat-bubble{right:18px;bottom:150px}
+   .hd-chat-body{max-height:min(380px,50vh)}
+   #map{position:fixed;inset:0}
+   #sidebar{pointer-events:auto}
 </style>
 <div id="map"></div>
 <div id="sidebar">
@@ -2551,6 +2556,21 @@ loadReviews('pending');
   <button onclick="filterBy('premium')" id="btn-premium">🌟 Premium (4-5 bintang)</button>
   <button onclick="filterBy('budget')" id="btn-budget">💰 Budget (<800rb)</button>
   <div id="hotel-list">${hotels.slice(0,20).map(h=>`<a href="/hotel/${h.slug}" target="_blank">⭐${h.stars||4} ${esc(h.name).slice(0,28)}</a>`).join('')}</div>
+</div>
+<!-- FLOATING AI CHAT ASSISTANT (maps) -->
+<button class="hd-chat-fab" onclick="hdChatToggle()" aria-label="AI Chat Assistant">🤖</button>
+<div class="hd-chat-bubble" id="hd-chat-box">
+  <div class="hd-chat-head">
+    <div class="hc-av">🤖</div>
+    <div><b>MyTriv AI</b><span>Panduan hotel ${esc(city)} · online</span></div>
+    <button class="hd-chat-close" onclick="hdChatToggle()" aria-label="Tutup">✕</button>
+  </div>
+  <div class="hd-chat-body" id="hd-chat-body"></div>
+  <div class="hd-chat-chips" id="hd-chat-chips"></div>
+  <div class="hd-chat-in">
+    <input id="hd-chat-input" placeholder="Tanya hotel, budget, wisata ${esc(city)}..." onkeydown="if(event.key==='Enter')hdChatSend(this.value)">
+    <button onclick="hdChatSend(document.getElementById('hd-chat-input').value)">Kirim</button>
+  </div>
 </div>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script>
@@ -2598,6 +2618,29 @@ function searchHotel(q){
   });
 }
 renderMarkers('all');
+/* Floating AI Chat for maps */
+(function(){
+  var CIT=${JSON.stringify(city)};
+  var COUNT=${hotels.length};
+  var BUDGET=${hotels.filter(h=>h.price_idr<800000).length};
+  var PREM=${hotels.filter(h=>(h.stars||4)>=4).length};
+  var AVG=${(hotels.reduce((s,h)=>s+(h.rating||4),0)/hotels.length).toFixed(1)};
+  var CHIPS=['hotel','budget','premium','wisata','itinerary','transport','booking'];
+  function chatGen(msg){
+    var t=msg.toLowerCase();
+    if(t.indexOf('hotel')!==-1||t.indexOf('murah')!==-1)return '🏨 Ada '+COUNT+' hotel di '+CIT+' di peta ini. Gunakan filter Premium / Budget di sidebar atau cari nama hotel. Klik marker untuk lihat detail & booking.';
+    if(t.indexOf('budget')!==-1||t.indexOf('hemat')!==-1||t.indexOf('murah')!==-1)return '💰 '+BUDGET+' hotel di '+CIT+' punya tarif di bawah 800 ribu/malam. Klik filter "Budget" di sidebar untuk menyorotnya di peta.';
+    if(t.indexOf('premium')!==-1||t.indexOf('bintang')!==-1||t.indexOf('luxury')!==-1)return '🌟 '+PREM+' hotel premium (4-5 bintang) tersedia di '+CIT+'. Klik filter "Premium" untuk melihatnya di peta.';
+    if(t.indexOf('wisata')!==-1||t.indexOf('tempat')!==-1||t.indexOf('atraksi')!==-1)return '🌍 '+CIT+' kaya destinasi: candi, pantai, kuliner, dan budaya. Cek halaman hotel di peta ini, lalu buka AI Travel Tips di halaman detail masing-masing hotel.';
+    if(t.indexOf('itinerary')!==-1||t.indexOf('jalan')!==-1)return '🗺️ Itinerary singkat '+CIT+': Hari 1 — check-in & eksplor pusat kota + kuliner. Hari 2 — atraksi utama, belanja oleh-oleh, check-out. Gunakan peta ini untuk memilih hotel terdekat.';
+    if(t.indexOf('transport')!==-1||t.indexOf('taksi')!==-1||t.indexOf('bandara')!==-1)return '🚗 Transportasi di '+CIT+': taksi & ojek online tersedia luas, plus kereta untuk antar kota. Bandingkan opsi shuttle dari bandara untuk rute terbaik.';
+    if(t.indexOf('booking')!==-1||t.indexOf('pesan')!==-1)return '🛎️ Klik marker hotel di peta lalu "Lihat Detail & Booking" untuk membandingkan harga di 8 OTA (Booking.com, Agoda, Traveloka, dll) — 100% gratis.';
+    return '🤖 Halo! Saya panduan '+CIT+' di peta interaktif MyTriv. Ada '+COUNT+' hotel, '+BUDGET+' budget & '+PREM+' premium (rating avg '+AVG+'). Tanya: hotel, budget, premium, wisata, itinerary, transportasi, atau booking!';
+  }
+  window.hdChatToggle=function(){var box=document.getElementById('hd-chat-box');var open=box.classList.toggle('open');if(open&&!box.getAttribute('data-started')){box.setAttribute('data-started','1');chatBoot();}};
+  window.hdChatSend=function(v){v=(v||'').trim();if(!v)return;var body=document.getElementById('hd-chat-body');var usr=document.createElement('div');usr.className='hd-chat-msg user';usr.textContent=v;body.appendChild(usr);var inp=document.getElementById('hd-chat-input');if(inp)inp.value='';body.scrollTop=body.scrollHeight;var tp=document.createElement('div');tp.className='hd-chat-typing';tp.textContent='🤖 mengetik...';body.appendChild(tp);setTimeout(function(){tp.remove();var b=document.createElement('div');b.className='hd-chat-msg bot';b.textContent=chatGen(v);body.appendChild(b);body.scrollTop=body.scrollHeight;},450);};
+  function chatBoot(){var body=document.getElementById('hd-chat-body');var chips=document.getElementById('hd-chat-chips');var hello=document.createElement('div');hello.className='hd-chat-msg bot';hello.textContent='🤖 Halo! Ada '+COUNT+' hotel di '+CIT+' di peta ini. Mau cari hotel budget, premium, atau rekomendasi itinerary?';body.appendChild(hello);var labels={hotel:'🏨 Hotel',budget:'💰 Budget',premium:'🌟 Premium',wisata:'🌍 Wisata',itinerary:'🗺️ Itinerary',transport:'🚗 Transport',booking:'🛎️ Booking'};Object.keys(labels).forEach(function(k){var b=document.createElement('button');b.textContent=labels[k];b.onclick=function(){window.hdChatSend(k);};chips.appendChild(b);});}
+})();
 </script>`;
       res.send(shell({ title, desc, canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: mapHtml }));
     } catch (e) {
