@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const fileUpload = require('express-fileupload');
+const fs = require('fs');
 
 const app = express();
 app.use(cors());
@@ -2092,6 +2094,33 @@ app.post('/api/maps/poi/:id/like', async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('UPDATE user_pois SET likes=likes+1 WHERE id=$1', [id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Upload foto untuk user POI marker
+app.post('/api/maps/poi/upload', async (req, res) => {
+  try {
+    if (!req.files || !req.files.image) return res.status(400).json({ error: 'No image uploaded' });
+    const img = req.files.image;
+    if (img.size > 5 * 1024 * 1024) return res.status(400).json({ error: 'Max 5MB' });
+    const ext = (img.name.split('.').pop() || 'jpg').toLowerCase();
+    if (!['jpg','jpeg','png','webp'].includes(ext)) return res.status(400).json({ error: 'Only jpg/png/webp' });
+    const fname = `poi_${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+    const uploadDir = '/srv/aicmap-server/uploads/pois';
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    await img.mv(`${uploadDir}/${fname}`);
+    res.json({ ok: true, url: `/uploads/pois/${fname}` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Update POI dengan foto
+app.post('/api/maps/poi/:id/image', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { image_url } = req.body;
+    if (!image_url) return res.status(400).json({ error: 'image_url required' });
+    await pool.query('UPDATE user_pois SET image_url=$1 WHERE id=$2', [image_url, id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
