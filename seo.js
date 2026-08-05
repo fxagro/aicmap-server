@@ -2569,10 +2569,6 @@ loadReviews('pending');
       <option>🍽️ Kuliner</option><option>☕ Kafe</option><option>📸 Wisata</option><option>🛍️ Belanja</option><option>💊 Kesehatan</option><option>📍 Lainnya</option>
     </select>
     <textarea id="poi-notes" placeholder="Catatan (opsional)..." rows="2" style="width:100%;padding:10px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:8px;font-size:13px;resize:vertical;"></textarea>
-    <div style="margin-bottom:8px;">
-      <label style="font-size:12px;color:var(--mut);display:block;margin-bottom:4px;">📷 Foto (opsional, max 5MB)</label>
-      <input type="file" id="poi-image" accept="image/*" style="font-size:12px;color:var(--mut);">
-    </div>
     <p style="font-size:11px;color:var(--mut);margin-bottom:12px;">📍 Klik pada peta untuk pilih lokasi, lalu isi form.</p>
     <div style="display:flex;gap:8px;">
       <button id="poi-submit-btn" onclick="submitPoi()" style="flex:1;padding:10px;background:var(--cy);color:#060B13;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">💾 Simpan</button>
@@ -2681,24 +2677,10 @@ async function submitPoi(){
   if(!name||!pickedLat){document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ Isi nama & klik peta untuk pilih lokasi</span>';return;}
   const cat=document.getElementById('poi-cat').value;
   const notes=document.getElementById('poi-notes').value.trim();
-  const imgFile=document.getElementById('poi-image').files[0];
   document.getElementById('add-status').innerHTML='<span style=color:var(--cy)>⏳ Menyimpan...</span>';
-  
-  let imageUrl='';
-  if(imgFile){
-    const fd=new FormData();fd.append('image',imgFile);
-    try{
-      const upR=await fetch('/api/maps/poi/upload',{method:'POST',body:fd});
-      const upD=await upR.json();
-      if(upD.ok)imageUrl=upD.url;
-      else{document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ Upload gagal: '+upD.error+'</span>';return;}
-    }catch(e){document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ Upload error</span>';return;}
-  }
-  
   fetch('/api/maps/poi',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    email:(window.__USER||{}).email||'',name,lat:pickedLat,lng:pickedLng,city:CITY_M,category:cat,notes,image_url:imageUrl
+    email:(window.__USER||{}).email||'',name,lat:pickedLat,lng:pickedLng,city:CITY_M,category:cat,notes
   })}).then(r=>r.json()).then(d=>{
-    if(imageUrl){fetch('/api/maps/poi/'+d.id+'/image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_url:imageUrl})});}
     if(d.ok){document.getElementById('add-status').innerHTML='<span style=color:#10B981>✅ '+d.message+'</span>';setTimeout(()=>location.reload(),1500);}
     else{document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ '+d.error+'</span>';}
   }).catch(function(){document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ Gagal. Coba login dulu.</span>';});
