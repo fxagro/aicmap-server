@@ -1838,6 +1838,7 @@ app.get('/api/villa/search', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Hotel feed for Google Merchant Center\napp.get(" /hotel-feed.xml, (req, res) => {\n const feedPath = __dirname + /hotel-feed.xml;\n if (!fs.existsSync(feedPath)) return res.status(404).send(Feed not found);\n res.set(Content-Type, pplication/xml);\n res.sendFile(feedPath);\n});\n
 const PORT = process.env.PORT || 3099;
 app.listen(PORT, () => {
   console.log(`Edu MyTriv Monopoly & Hotel Aggregator Backend API running on port ${PORT}`);
