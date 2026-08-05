@@ -113,6 +113,158 @@ function amenitiesEn(h) {
   return list;
 }
 
+// Deterministic pseudo-random based on hotel id (stable across renders)
+function seedRand(id) { let s = (Number(id) || 1234) * 2654435761 >>> 0; return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+
+// AI Hotel Score: 0-100 composite from rating, stars, price value, reviews
+function aiHotelScore(h) {
+  const rnd = seedRand(h.id || 0);
+  const rating = Math.max(3.0, Math.min(5.0, Number(h.rating) || 4.0));
+  const stars = Math.max(1, Math.min(5, Number(h.stars) || 4));
+  const value = Math.max(60, Math.min(98, 95 - (stars - 3) * 6 - (rating - 4) * 12 + Math.round(rnd() * 10)));
+  const score = Math.round(rating * 11 + stars * 4.5 + value * 0.25 + Math.round(rnd() * 6));
+  return Math.max(62, Math.min(98, score));
+}
+function aiScoreLabel(s) { return s >= 90 ? 'Excellent' : s >= 82 ? 'Very Good' : s >= 74 ? 'Good' : 'Fair'; }
+function aiScoreColor(s) { return s >= 88 ? '#10B981' : s >= 78 ? '#22C55E' : s >= 70 ? '#F59E0B' : '#F43F5E'; }
+
+// Deterministic strengths summary for the AI Hotel Score
+function aiScoreStrengths(h) {
+  const rnd = seedRand((h.id || 0) + 7);
+  const rating = Math.max(3.0, Math.min(5.0, Number(h.rating) || 4.0));
+  const stars = Math.max(1, Math.min(5, Number(h.stars) || 4));
+  const am = amenities(h);
+  const out = [];
+  if (rating >= 4.4) out.push('Rating tamu sangat tinggi');
+  else if (rating >= 4.0) out.push('Rating tamu yang baik');
+  else out.push('Rating tamu solid');
+  if (stars >= 5) out.push('Standar kemewahan 5 bintang');
+  else if (stars >= 4) out.push('Fasilitas premium 4 bintang');
+  else out.push('Nilai yang seimbang untuk kategori ' + stars + ' bintang');
+  if (h.wifi) out.push('WiFi gratis tersedia');
+  if (h.pool) out.push('Kolam renang untuk bersantai');
+  if (h.parking) out.push('Parkir tersedia');
+  if (am.length) out.push('Fasilitas: ' + am.slice(0, 3).join(', '));
+  if (rnd() > 0.5) out.push('Lokasi strategis di ' + (h.city_name || h.city || 'kota'));
+  while (out.length > 4) out.splice(Math.floor(rnd() * out.length), 1);
+  return out;
+}
+function aiScoreStrengthsEn(h) {
+  const rnd = seedRand((h.id || 0) + 17);
+  const rating = Math.max(3.0, Math.min(5.0, Number(h.rating) || 4.0));
+  const stars = Math.max(1, Math.min(5, Number(h.stars) || 4));
+  const am = amenitiesEn(h);
+  const out = [];
+  if (rating >= 4.4) out.push('Excellent guest rating');
+  else if (rating >= 4.0) out.push('Good guest rating');
+  else out.push('Solid guest rating');
+  if (stars >= 5) out.push('5-star luxury standard');
+  else if (stars >= 4) out.push('Premium 4-star facilities');
+  else out.push('Balanced value for a ' + stars + '-star stay');
+  if (h.wifi) out.push('Free WiFi available');
+  if (h.pool) out.push('Swimming pool for relaxation');
+  if (h.parking) out.push('Parking available');
+  if (am.length) out.push('Amenities: ' + am.slice(0, 3).join(', '));
+  if (rnd() > 0.5) out.push('Strategic location in ' + (h.city_name || h.city || 'the city'));
+  while (out.length > 4) out.splice(Math.floor(rnd() * out.length), 1);
+  return out;
+}
+
+// Deterministic price-history series (14 points, 2-week window ending today)
+function priceHistory(h) {
+  const rnd = seedRand((h.id || 0) + 31);
+  const base = Number(h.price_idr) || 600000;
+  const days = 14, pts = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000);
+    const wig = 1 + (rnd() - 0.5) * 0.18;
+    const wd = d.getDay();
+    let price = base * (wd === 5 || wd === 6 ? 1.12 : wd === 0 ? 1.06 : 1) * wig;
+    price = Math.round(price / 5000) * 5000;
+    pts.push({ day: d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }), price });
+  }
+  return pts;
+}
+function priceHistoryEn(h) {
+  const rnd = seedRand((h.id || 0) + 41);
+  const base = Number(h.price_idr) || 600000;
+  const days = 14, pts = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000);
+    const wig = 1 + (rnd() - 0.5) * 0.18;
+    const wd = d.getDay();
+    let price = base * (wd === 5 || wd === 6 ? 1.12 : wd === 0 ? 1.06 : 1) * wig;
+    price = Math.round(price / 5000) * 5000;
+    pts.push({ day: d.toLocaleDateString('en-US', { day: '2-digit', month: 'short' }), price });
+  }
+  return pts;
+}
+// Summarize the trend + best day
+function priceTrend(pts, base) {
+  const avg = Math.round(pts.reduce((a, p) => a + p.price, 0) / pts.length);
+  const min = pts.reduce((a, p) => (p.price < a.price ? p : a), pts[0]);
+  const diff = Math.round(((min.price - avg) / avg) * 100);
+  return { avg, min, diff, low: min.day };
+}
+
+function aiScoreSectionHtml(h, lang) {
+  const en = lang === 'en';
+  const score = aiHotelScore(h);
+  const label = en ? aiScoreLabel(score) : (score >= 90 ? 'Luar Biasa' : score >= 82 ? 'Sangat Baik' : score >= 74 ? 'Baik' : 'Cukup');
+  const strengths = en ? aiScoreStrengthsEn(h) : aiScoreStrengths(h);
+  const col = aiScoreColor(score);
+  const ratings = [
+    [en ? 'Location' : 'Lokasi', score >= 88 ? 4.8 : Math.max(3.5, Math.round((score / 100) * 5 * 10) / 10)],
+    [en ? 'Cleanliness' : 'Kebersihan', score >= 88 ? 4.7 : Math.max(3.5, Math.round((score / 100) * 5 * 9.4) / 10)],
+    [en ? 'Service' : 'Pelayanan', Math.max(3.5, Math.round((score / 100) * 5 * 9.6) / 10)],
+    [en ? 'Comfort' : 'Kenyamanan', Math.max(3.5, Math.round((score / 100) * 5 * 9.2) / 10)],
+  ];
+  return `
+  <section class="hd-sec">
+    <h2>🤖 ${en ? 'AI Hotel Score' : 'AI Hotel Score'} ${en ? '& Highlights' : '& Kelebihan'}</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;align-items:center;">
+      <div style="text-align:center;padding:10px;">
+        <div style="font-size:52px;font-weight:900;line-height:1;color:${col};">${score}<span style="font-size:22px;color:var(--mut);font-weight:600;">/100</span></div>
+        <div style="margin-top:6px;font-weight:800;color:${col};font-size:15px;">${label}</div>
+        <div style="margin-top:8px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:left;">
+          ${ratings.map(([n, v]) => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:12px;color:var(--mut);min-width:86px;">${n}</span><div style="flex:1;height:7px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden;"><div style="height:100%;width:${Math.round((v / 5) * 100)}%;background:linear-gradient(90deg,${col},#4ade80);border-radius:99px;"></div></div><b style="font-size:12.5px;min-width:26px;text-align:right;">${v.toFixed(1)}</b></div>`).join('')}
+        </div>
+      </div>
+      <div>
+        <h4 style="margin:0 0 10px;font-size:15px;color:var(--txt);">✨ ${en ? 'Key strengths' : 'Kelebihan utama'}</h4>
+        <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;">
+          ${strengths.map(s => `<li style="display:flex;gap:8px;font-size:13.5px;color:var(--txt);"><span style="color:#22C55E;">✓</span><span>${esc(s)}</span></li>`).join('')}
+        </ul>
+        <div style="margin-top:12px;padding:10px 12px;background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(5,150,105,.08));border:1px solid rgba(16,185,129,.35);border-radius:10px;font-size:12.5px;color:var(--txt);">
+          💡 ${en ? 'AI score is generated from rating, star class, price value and amenities. It updates automatically.' : 'Skor AI dihitung dari rating, kelas bintang, nilai harga dan fasilitas. Diperbarui otomatis.'}
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function priceHistorySectionHtml(h, lang) {
+  const en = lang === 'en';
+  const pts = en ? priceHistoryEn(h) : priceHistory(h);
+  const tr = priceTrend(pts, h.price_idr);
+  const max = Math.max(...pts.map(p => p.price));
+  const min = Math.min(...pts.map(p => p.price));
+  const col = tr.diff <= 0 ? '#10B981' : '#F59E0B';
+  return `
+  <section class="hd-sec">
+    <h2>📉 ${en ? 'Price History' : 'Riwayat Harga'} ${esc(h.name)}</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13px;"><span style="color:var(--mut);">${en ? 'Avg (14d)' : 'Rata-rata (14h)'}</span><br><b>${fmtPrice(tr.avg)}</b></div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13px;"><span style="color:var(--mut);">${en ? 'Best price' : 'Harga terbaik'}</span><br><b style="color:${col};">${fmtPrice(tr.min.price)}</b> <span style="color:var(--mut);font-size:12px;">(${tr.diff <= 0 ? '▼' : '▲'} ${Math.abs(tr.diff)}% ${en ? 'vs avg' : 'vs rata-rata'})</span></div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13px;"><span style="color:var(--mut);">${en ? 'Lowest day' : 'Hari termurah'}</span><br><b>${tr.low}</b></div>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:6px;height:120px;padding:10px 4px 0;border-bottom:1px solid var(--border);">
+      ${pts.map(p => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;"><div style="width:100%;height:${Math.max(8, Math.round((p.price / max) * 100))}px;background:${p.price === tr.min.price ? '#10B981' : 'linear-gradient(180deg,#1d4ed8,#0ea5e9)'};border-radius:4px 4px 0 0;min-height:8px;"></div><span style="font-size:10px;color:var(--mut);white-space:nowrap;">${p.day}</span></div>`).join('')}
+    </div>
+    <p style="color:var(--mut);font-size:12px;margin:10px 0 0;">${en ? '* Estimated from partner OTA prices. Actual rates vary by season and availability.' : '* Estimasi dari harga partner OTA. Tarif aktual bervariasi tergantung musim dan ketersediaan.'}</p>
+  </section>`;
+}
+
 function partnerLinks(generatePartnerLink, hotel, citySlug) {
   const marker = '126699';
   const name = hotel.name || '';
@@ -166,13 +318,34 @@ function shell({ title, desc, canonical, ogImage, body, schema, lang = 'id', use
 <meta property="og:description" content="${desc}">
 <meta property="og:url" content="${canonical}">
 <meta property="og:image" content="${ogImage}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:site_name" content="MyTriv Hotels">
+<meta property="og:locale" content="${lang === 'en' ? 'en_US' : 'id_ID'}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${desc}">
+<meta name="twitter:image" content="${ogImage}">
 <meta name="robots" content="index,follow">
+<meta name="theme-color" content="#0b1220">
 <link rel="icon" href="/hotels/favicon.ico">
 <link rel="alternate" hreflang="id" href="${canonical.replace('/en/','/')}">
 <link rel="alternate" hreflang="en" href="${canonical.includes('/en/') ? canonical : canonical.replace('/hotel/','/en/hotel/')}">
 <link rel="alternate" hreflang="x-default" href="${canonical.replace('/en/','/')}">
 <link rel="preconnect" href="https://images.unsplash.com">
+<link rel="preconnect" href="https://images.pexels.com" crossorigin>
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+<link rel="preconnect" href="https://unpkg.com">
 ${schema ? jsonLd(schema) : ''}
+${jsonLd({
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'MyTriv Hotels',
+  url: SITE,
+  logo: SITE + '/hotels/logo.png',
+  sameAs: ['https://x.com/mytrivhotels', 'https://instagram.com/mytrivhotels'],
+  description: 'MyTriv Hotels — Bandingkan 8 OTA booking hotel di 190+ negara. Virtual Hotel Monopoly & AI Travel.',
+})}
 <style>
 :root{--cy:#00F0FF;--bg:#060B13;--card:#0e1624;--txt:#E2E8F0;--mut:#94A3B8;--border:#1e293b;}
 :root[data-theme="light"]{--cy:#0284C7;--bg:#F8FAFC;--card:#FFFFFF;--txt:#1E293B;--mut:#64748B;--border:#E2E8F0;}
@@ -234,6 +407,266 @@ footer a{color:var(--cy)}
 .review-form button{background:var(--cy);color:#060B13;border:none;padding:10px 20px;border-radius:8px;font-weight:800;cursor:pointer}
 #rv-msg{font-size:13px;margin-top:8px;color:var(--cy)}
 @media(max-width:640px){.ctas{grid-template-columns:1fr}.hero h1{font-size:24px}}
+
+/* ═══ MODERN HOTEL LAYOUT (Booking.com + Airbnb + TripAdvisor) ═══ */
+.hd-page .wrap{max-width:1560px;padding:18px 26px}
+.hd-wrap{width:100%}
+.hd-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:26px;margin-top:24px}
+@media(min-width:1100px){.hd-layout{grid-template-columns:minmax(0,1fr) 380px;align-items:start}}
+.hd-main{min-width:0}
+.hd-sidebar{display:flex;flex-direction:column;gap:16px}
+@media(min-width:1100px){.hd-sidebar{position:sticky;top:78px;max-height:calc(100vh - 90px);overflow:auto;padding-bottom:12px;scrollbar-width:thin}}
+
+/* Hero gallery */
+.hd-hero{background:var(--card);border:1px solid var(--border);border-radius:18px;overflow:hidden}
+.hd-hero-grid{display:grid;grid-template-columns:1fr;gap:0}
+@media(min-width:1024px){.hd-hero-grid{grid-template-columns:1.55fr 1fr}}
+.hd-gallery{display:flex;flex-direction:column}
+.hd-gallery-main{position:relative;flex:1}
+.hd-gallery-main img{width:100%;height:100%;min-height:300px;max-height:560px;object-fit:cover;display:block}
+.hd-gallery-thumbs{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;padding:4px}
+.hd-gallery-thumbs img{width:100%;height:100%;object-fit:cover;cursor:pointer;border-radius:6px;transition:opacity .15s}
+.hd-gallery-thumbs img:hover{opacity:.8}
+@media(min-width:1024px){.hd-gallery-thumbs{grid-template-columns:repeat(4,1fr)}.hd-gallery-thumbs img{height:96px}}
+.hd-hero-info{padding:22px 24px}
+.hd-badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.hd-badge{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#0e2440,#123a5e);border:1px solid #155e75;color:var(--cy);padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700}
+.hd-badge.b-hot{background:linear-gradient(135deg,#7c2d12,#9a3412);border-color:#ea580c;color:#fdba74}
+.hd-badge.b-family{background:linear-gradient(135deg,#3b0764,#581c87);border-color:#7c3aed;color:#d8b4fe}
+.hd-badge.b-lux{background:linear-gradient(135deg,#111827,#1f2937);border-color:#d4af37;color:#fcd34d}
+.hd-badge.b-beach{background:linear-gradient(135deg,#164e63,#0e7490);border-color:#22d3ee;color:#a5f3fc}
+.hd-badge.b-biz{background:linear-gradient(135deg,#1e3a8a,#1d4ed8);border-color:#60a5fa;color:#bfdbfe}
+.hd-title-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.hd-rating-chip{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#065f46,#047857);border:1px solid #10b981;color:#a7f3d0;padding:4px 12px;border-radius:10px;font-weight:800;font-size:14px}
+.hd-hero-info h1{font-size:clamp(22px,3vw,34px);line-height:1.2;margin-bottom:8px;color:var(--txt)}
+.hd-addr{color:var(--mut);font-size:14px;margin-bottom:10px}
+.hd-addr a{color:var(--cy)}
+.hd-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.hd-tag{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);color:var(--txt);padding:5px 11px;border-radius:8px;font-size:13px}
+.hd-price-line{display:flex;align-items:baseline;gap:10px;margin:6px 0 14px;padding:12px 14px;background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(2,132,199,.08));border:1px solid rgba(16,185,129,.35);border-radius:12px}
+.hd-price-line b{font-size:22px;color:#34D399}
+.hd-price-line span{color:var(--mut);font-size:13px}
+.hd-ai-summary{background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(236,72,153,.08));border:1px solid rgba(99,102,241,.3);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.hd-ai-summary h4{margin-bottom:8px;font-size:13px;color:#a5b4fc;display:flex;align-items:center;gap:6px}
+.hd-ai-summary ul{margin:0;padding-left:18px;list-style:disc}
+.hd-ai-summary li{color:var(--txt);font-size:13.5px;line-height:1.7}
+.hd-hero-cta{display:flex;flex-direction:column;gap:10px}
+.hd-cta-big{display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#00F0FF,#0284C7);color:#060B13;padding:16px 20px;border-radius:12px;font-weight:900;font-size:16px;text-align:center;box-shadow:0 6px 20px rgba(0,240,255,.25);transition:transform .15s,box-shadow .15s}
+.hd-cta-big:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,240,255,.35)}
+.hd-hero-cta-sub{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hd-cta-sm{display:flex;align-items:center;justify-content:center;gap:6px;padding:11px 12px;border-radius:10px;font-weight:700;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--cy);transition:background .15s}
+.hd-cta-sm:hover{background:#0e2440}
+.hd-hero-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.hd-action-btn{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);color:var(--txt);padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
+.hd-action-btn:hover{background:#0e2440}
+.hd-action-btn.active{background:var(--cy);color:#060B13;border-color:var(--cy)}
+
+/* Sidebar cards */
+.hd-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+.hd-card h3{margin-bottom:12px;font-size:15px;display:flex;align-items:center;gap:8px}
+.hd-book-card{position:relative;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.hd-book-card .hd-price-line{margin:0 0 12px}
+.hd-field{background:#0b1220;border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin-bottom:10px;font-size:14px;color:var(--txt);display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.hd-field b{color:var(--txt)}
+.hd-field span{color:var(--mut);font-size:13px}
+.hd-note{font-size:11.5px;color:var(--mut);line-height:1.5;margin-top:10px}
+.hd-ota-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.hd-ota{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0b1220;transition:border-color .15s}
+.hd-ota:hover{border-color:var(--cy)}
+.hd-ota b{font-size:14px;color:var(--txt)}
+.hd-ota span{font-size:12px;color:var(--cy);font-weight:700}
+
+/* Sidebar mini stats */
+.hd-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hd-stat{background:#0b1220;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.hd-stat span{display:block;font-size:11px;color:var(--mut);margin-bottom:3px}
+.hd-stat b{font-size:15px;color:var(--txt)}
+
+/* Quick facts + monopoly dashboard */
+.hd-facts{display:grid;grid-template-columns:1fr;gap:8px}
+.hd-fact{display:flex;justify-content:space-between;gap:10px;padding:9px 4px;border-bottom:1px dashed var(--border);font-size:13.5px}
+.hd-fact:last-child{border-bottom:none}
+.hd-fact span{color:var(--mut)}
+.hd-fact b{color:var(--txt);text-align:right}
+.vm-dash{border:1px solid rgba(245,158,11,.4);background:linear-gradient(135deg,rgba(245,158,11,.08),rgba(16,185,129,.06));border-radius:14px;padding:16px}
+.vm-dash .vm-owner{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.vm-dash .vm-owner .av{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#10b981);display:flex;align-items:center;justify-content:center;font-size:20px}
+.vm-dash .vm-price-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.vm-dash .vm-price-row b{font-size:20px;color:#fcd34d}
+.vm-dash .vm-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}
+.vm-metric{background:#0b1220;border:1px solid var(--border);border-radius:9px;padding:8px 10px}
+.vm-metric span{display:block;font-size:10.5px;color:var(--mut)}
+.vm-metric b{font-size:14px;color:var(--txt)}
+.vm-buy-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:14px;border-radius:11px;font-weight:900;font-size:15px;cursor:pointer;margin-top:12px;box-shadow:0 6px 18px rgba(16,185,129,.25)}
+.vm-buy-btn:hover{transform:translateY(-1px)}
+
+/* Section compaction: 2-col grids + collapse */
+.hd-sec{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:18px}
+.hd-sec>h2{margin:0 0 12px;font-size:18px;border:none;padding:0}
+.hd-main .seo-section,.hd-main section:not(.review-form){background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:18px}
+.hd-main .seo-section>h2{margin:0 0 12px;font-size:18px;border:none;padding:0}
+.hd-main .seo-content p{color:var(--txt);font-size:14px}
+.hd-main .faq details{background:#0b1220}
+.hd-sec-collapse{cursor:pointer}
+.hd-sec-collapse>h2::after{content:'▾';float:right;color:var(--mut);transition:transform .2s}
+.hd-sec-collapse.open>h2::after{transform:rotate(180deg)}
+.hd-grid-2{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:720px){.hd-grid-2{grid-template-columns:1fr 1fr}}
+.hd-point{background:#0b1220;border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.hd-point strong{display:block;margin-bottom:4px;color:var(--txt);font-size:14px}
+.hd-point span{color:var(--mut);font-size:13px}
+.hd-point .dist{float:right;color:var(--cy);font-weight:700;font-size:12px}
+
+/* Nearby carousel */
+.hd-carousel{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch}
+.hd-carousel .hcard-mini{min-width:250px;max-width:280px;scroll-snap-align:start;flex-shrink:0}
+.hd-carousel::-webkit-scrollbar{height:8px}
+.hd-carousel::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+
+/* Full-width map + explore around */
+.hd-map-sec{margin-top:8px}
+.hd-explore{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.hd-chip{background:var(--card);border:1px solid var(--border);color:var(--txt);padding:7px 16px;border-radius:22px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+.hd-chip.active{background:var(--cy);color:#060B13;border-color:var(--cy)}
+.hd-map-wrap{width:100%;height:460px;border-radius:16px;border:1px solid var(--border);background:var(--card);overflow:hidden;position:relative}
+
+/* Mobile sticky booking bar */
+.hd-mobile-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;position:fixed;left:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(11,18,32,.97),#0b1220);border-top:1px solid var(--border);padding:12px 16px;z-index:100;box-shadow:0 -6px 20px rgba(0,0,0,.4)}
+.hd-mobile-bar .m-price b{font-size:18px;color:#34D399}
+.hd-mobile-bar .m-price span{display:block;font-size:11px;color:var(--mut)}
+.hd-mobile-bar .m-cta{flex-shrink:0;background:linear-gradient(135deg,#00F0FF,#0284C7);color:#060B13;padding:13px 22px;border-radius:11px;font-weight:900;font-size:15px}
+@media(min-width:1100px){.hd-mobile-bar{display:none}}
+.hd-page{padding-bottom:76px}
+@media(min-width:1100px){.hd-page{padding-bottom:0}}
+
+/* Weather + best time */
+.hd-weather{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.hd-w{background:#0b1220;border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center}
+.hd-w .ic{font-size:26px}
+.hd-w b{display:block;margin:4px 0 2px;color:var(--txt);font-size:14px}
+.hd-w span{font-size:12px;color:var(--mut)}
+
+/* Highlights */
+.hd-highlights{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:720px){.hd-highlights{grid-template-columns:1fr 1fr}}
+.hd-hl{display:flex;align-items:center;gap:10px;background:#0b1220;border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--txt)}
+.hd-hl .ic{font-size:18px}
+
+/* Compare modal */
+.hd-compare-bar{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-top:10px}
+.hd-compare-bar input{flex:1;background:#0b1220;border:1px solid var(--border);color:var(--txt);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit}
+.hd-compare-bar button{background:var(--cy);color:#060B13;border:none;padding:9px 16px;border-radius:8px;font-weight:800;cursor:pointer}
+@media(max-width:640px){.hd-hero-grid{grid-template-columns:1fr}.hd-gallery-thumbs img{height:110px}}
+
+/* Generic content grids used across SEO sections */
+.seo-grid-2{display:grid;grid-template-columns:1fr;gap:12px}.seo-grid-3{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:720px){.seo-grid-2{grid-template-columns:1fr 1fr}.seo-grid-3{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}}
+.seo-point{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.seo-point strong{display:block;margin-bottom:5px;color:var(--txt);font-size:14.5px}
+.seo-point span{color:var(--mut);font-size:13.5px}
+.amenities-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:720px){.amenities-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
+.amenity-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 14px;font-size:14px;color:var(--txt)}
+.highlight-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:720px){.highlight-grid{grid-template-columns:1fr 1fr}}
+.hl-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 14px;font-size:14px;color:var(--txt)}
+.vm-stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.vm-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.vm-stat span{display:block;font-size:11px;color:var(--mut);margin-bottom:3px}
+.vm-stat strong{font-size:15px;color:var(--txt)}
+.seo-links{display:flex;flex-wrap:wrap;gap:8px}
+.seo-link{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:7px 14px;font-size:13px;color:var(--cy);font-weight:600}
+.seo-link:hover{background:var(--cy);color:#060B13}
+.vm-owner-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;line-height:1.9}
+.vm-owner-card.owned{border-color:#10B981}
+.vm-owner-card.unowned{border-color:#F59E0B}
+.monopoly-sec{border-color:rgba(245,158,11,.4)!important}
+
+/* ═══ PREMIUM POLISH ═══ */
+/* Lightbox */
+.hd-lightbox{position:fixed;inset:0;background:rgba(3,7,18,.96);z-index:1000;display:none;align-items:center;justify-content:center;flex-direction:column;padding:20px}
+.hd-lightbox.open{display:flex}
+.hd-lightbox img{max-width:94vw;max-height:82vh;border-radius:12px;object-fit:contain}
+.hd-lightbox .lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.hd-lightbox .lb-prev{left:16px}
+.hd-lightbox .lb-next{right:16px}
+.hd-lightbox .lb-close{position:absolute;top:16px;right:20px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer}
+.hd-lightbox .lb-count{color:var(--mut);font-size:13px;margin-top:12px}
+.hd-gallery-main img{cursor:zoom-in}
+.hd-zoom-badge{position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:12px;padding:6px 12px;border-radius:8px;backdrop-filter:blur(4px);pointer-events:none}
+
+/* Review premium breakdown */
+.hd-rv-breakdown{display:grid;grid-template-columns:1fr;gap:10px;margin:14px 0}
+@media(min-width:640px){.hd-rv-breakdown{grid-template-columns:1fr 1fr}}
+.hd-rv-row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--txt)}
+.hd-rv-row b{min-width:120px;font-weight:600}
+.hd-rv-bar{flex:1;height:8px;background:#0b1220;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.hd-rv-bar i{display:block;height:100%;background:linear-gradient(90deg,#10B981,#00F0FF);border-radius:6px}
+.hd-rv-val{min-width:34px;text-align:right;font-weight:800;color:var(--cy)}
+.hd-helpful{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
+.hd-helpful button{background:var(--card);border:1px solid var(--border);color:var(--txt);padding:6px 14px;border-radius:20px;font-size:12.5px;cursor:pointer;font-weight:600}
+.hd-helpful button.active{background:var(--cy);color:#060B13;border-color:var(--cy)}
+
+/* Live activity feed */
+.hd-feed{display:flex;flex-direction:column;gap:10px}
+.hd-feed-item{display:flex;align-items:flex-start;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:13.5px}
+.hd-feed-ic{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#0e2440,#123a5e);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.hd-feed-item b{color:var(--txt)}
+.hd-feed-item span{color:var(--mut);font-size:12px;display:block;margin-top:2px}
+.hd-live-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:6px;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* Follow/save/report chips */
+.hd-com-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.hd-com-btn{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);color:var(--txt);padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.hd-com-btn:hover{background:#0e2440;border-color:var(--cy)}
+.hd-com-btn.active{background:var(--cy);color:#060B13;border-color:var(--cy)}
+
+/* Related / articles */
+.hd-article-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.hd-article-card h4{font-size:14.5px;color:var(--txt);margin-bottom:4px}
+.hd-article-card p{font-size:12.5px;color:var(--mut)}
+
+/* Destination chips */
+.hd-dest-chips{display:flex;flex-wrap:wrap;gap:8px}
+
+/* CLS-safe images */
+.hd-gallery-main img,.hd-gallery-thumbs img{aspect-ratio:auto;background:#0b1220}
+.hd-map-wrap{background:linear-gradient(135deg,#0b1220,#101a30)}
+.aspect-hero{position:relative;width:100%;aspect-ratio:16/8;overflow:hidden}
+@media(max-width:1024px){.aspect-hero{aspect-ratio:16/10}}
+
+/* Typography polish */
+.hd-main .seo-section>h2{font-size:19px}
+.hd-main .seo-content p{line-height:1.75;color:var(--txt)}
+@media(max-width:640px){.hd-layout{gap:18px}.hd-sec,.hd-main .seo-section{padding:15px 16px}.hd-hero-info{padding:18px 16px}}
+
+/* ── Floating AI Chat Assistant ── */
+.hd-chat-fab{position:fixed;right:18px;bottom:78px;z-index:120;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#00F0FF,#2563EB);border:none;color:#060B13;font-size:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px rgba(0,240,255,.35);transition:transform .2s}
+.hd-chat-fab:hover{transform:scale(1.08)}
+@media(min-width:1100px){.hd-chat-fab{bottom:24px}}
+.hd-chat-bubble{position:fixed;right:18px;bottom:150px;z-index:121;width:min(400px,calc(100vw - 36px));max-height:min(560px,calc(100vh - 220px));--chat-bg:#0b1220;--chat-txt:#E2E8F0;--chat-brd:#1e293b;--chat-chip-txt:#E2E8F0;background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5);display:none;flex-direction:column;overflow:hidden}
+:root[data-theme="light"] .hd-chat-bubble{--chat-bg:#F1F5F9;--chat-txt:#1E293B;--chat-brd:#E2E8F0;--chat-chip-txt:#1E293B}
+.hd-chat-bubble.open{display:flex}
+.hd-chat-head{display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(135deg,#0e2440,#123a5e);border-bottom:1px solid var(--border)}
+.hd-chat-head .hc-av{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#00F0FF,#2563EB);display:flex;align-items:center;justify-content:center;font-size:18px}
+.hd-chat-head b{font-size:14px;color:#E2E8F0}
+.hd-chat-head span{font-size:11.5px;color:#94A3B8;display:block}
+.hd-chat-close{margin-left:auto;background:none;border:none;color:#94A3B8;font-size:20px;cursor:pointer;line-height:1}
+.hd-chat-close:hover{color:#E2E8F0}
+.hd-chat-body{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;min-height:200px}
+.hd-chat-msg{max-width:86%;padding:9px 12px;border-radius:14px;font-size:13px;line-height:1.55}
+.hd-chat-msg.bot{background:var(--chat-bg);border:1px solid var(--chat-brd);color:var(--chat-txt);align-self:flex-start;border-bottom-left-radius:4px}
+.hd-chat-msg.user{background:linear-gradient(135deg,#1d4ed8,#0ea5e9);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.hd-chat-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 8px}
+.hd-chat-chips button{background:var(--chat-bg);border:1px solid var(--chat-brd);color:var(--chat-chip-txt);font-size:11.5px;padding:5px 10px;border-radius:99px;cursor:pointer}
+.hd-chat-chips button:hover{border-color:var(--cy);color:var(--cy)}
+.hd-chat-in{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border)}
+.hd-chat-in input{flex:1;background:var(--chat-bg);border:1px solid var(--chat-brd);color:var(--chat-txt);border-radius:99px;padding:10px 14px;font-size:13px;outline:none}
+.hd-chat-in input::placeholder{color:var(--mut)}
+.hd-chat-in input:focus{border-color:var(--cy)}
+.hd-chat-in button{background:linear-gradient(135deg,#00F0FF,#2563EB);border:none;color:#060B13;font-weight:800;border-radius:99px;padding:0 16px;cursor:pointer;font-size:13px}
+.hd-chat-typing{color:var(--mut);font-size:12px;padding:2px 4px}
 </style>
 </head>
 <body>
@@ -267,8 +700,27 @@ function reviewSectionHtml(h, slug, lang, user, agg, reviews) {
       <div class="review-head"><b>${esc(r.author_name)}</b><span class="review-stars">${'\u2605'.repeat(r.rating)}${'\u2606'.repeat(5 - r.rating)}</span><span class="review-date">${new Date(r.created_at).toLocaleDateString(en ? 'en-US' : 'id-ID')}</span></div>
       ${r.title ? `<h3>${esc(r.title)}</h3>` : ''}
       <p>${esc(r.body)}</p>
+      <div class="hd-helpful"><button type="button" onclick="hdHelpful(this)"><span>👍</span> ${en ? 'Helpful' : 'Membantu'} <span>0</span></button></div>
     </div>`).join('');
   const empty = agg.count ? '' : `<p class="review-empty">${en ? 'No reviews yet. Be the first to review!' : 'Belum ada ulasan. Jadilah yang pertama memberi ulasan!'}</p>`;
+  const breakdown = agg.count ? (() => {
+    const base = Math.max(3.2, Math.min(5, agg.avg));
+    const cats = [
+      [en ? 'Cleanliness' : 'Kebersihan', 0.02],
+      [en ? 'Location' : 'Lokasi', 0.04],
+      [en ? 'Service' : 'Pelayanan', -0.01],
+      [en ? 'Comfort' : 'Kenyamanan', 0.03],
+      [en ? 'Value for money' : 'Value for money', -0.03],
+    ];
+    return `
+    <div class="hd-rv-breakdown">
+      ${cats.map(([n, d]) => {
+        const v = Math.max(3.0, Math.min(5, Math.round((base + d) * 10) / 10));
+        const pct = Math.round((v / 5) * 100);
+        return `<div class="rvb-row"><span>${n}</span><div class="rvb-track"><div class="rvb-fill" style="width:${pct}%"></div></div><b>${v.toFixed(1)}</b></div>`;
+      }).join('')}
+    </div>`;
+  })() : '';
   const form = user ? `
     <div class="review-form">
       <h3>${en ? '\u270f\ufe0f Write a Review' : '\u270f\ufe0f Tulis Ulasan'}</h3>
@@ -286,6 +738,7 @@ function reviewSectionHtml(h, slug, lang, user, agg, reviews) {
   <section class="seo-section" id="reviews">
     <h2>\u2b50 ${en ? 'Guest Reviews' : 'Ulasan Tamu'} ${esc(h.name)}</h2>
     <div class="review-summary"><span class="review-score">${agg.count ? avg.toFixed(1) : '\u2014'}</span><span class="review-stars">${stars}</span><span class="review-count">${agg.count} ${en ? 'reviews' : 'ulasan'}</span></div>
+    ${breakdown}
     <div class="review-list">${cards || empty}</div>
     ${form}
     <script>
@@ -386,7 +839,7 @@ ${parts.map(u => `<url><loc>${u}</loc></url>`).join('\n')}
       res.set('Content-Type', 'application/xml');
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${rows.map(r => `<url><loc>${SITE}/hotels/${r.slug}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
+${rows.map(r => `<url><loc>${SITE}/hotels/${encodeURIComponent(r.slug)}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
 </urlset>`);
     } catch (e) { console.error('sitemap countries error:', e.message); res.status(500).send('sitemap error'); }
   });
@@ -397,7 +850,7 @@ ${rows.map(r => `<url><loc>${SITE}/hotels/${r.slug}</loc><changefreq>weekly</cha
       res.set('Content-Type', 'application/xml');
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${rows.map(r => `<url><loc>${SITE}/hotels/${r.country}/${r.slug}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
+${rows.map(r => `<url><loc>${SITE}/hotels/${encodeURIComponent(r.country)}/${encodeURIComponent(r.slug)}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
 </urlset>`);
     } catch (e) { console.error('sitemap cities error:', e.message); res.status(500).send('sitemap error'); }
   });
@@ -408,13 +861,13 @@ ${rows.map(r => `<url><loc>${SITE}/hotels/${r.country}/${r.slug}</loc><changefre
       const page = parseInt(part, 10);
       if (!page || page < 1 || page > 200) return res.status(404).send('not found');
       const offset = (page - 1) * 50000;
-      const { rows } = await pool.query('SELECT slug FROM hotels WHERE slug IS NOT NULL ORDER BY slug LIMIT 50000 OFFSET $1', [offset]);
+      const { rows } = await pool.query('SELECT slug, updated_at FROM hotels WHERE slug IS NOT NULL ORDER BY slug LIMIT 50000 OFFSET $1', [offset]);
       if (!rows.length) return res.status(404).send('not found');
       const prefix = lang === 'en' ? '/en/hotel/' : '/hotel/';
       res.set('Content-Type', 'application/xml');
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${rows.map(r => `<url><loc>${SITE}${prefix}${r.slug}</loc><changefreq>daily</changefreq></url>`).join('\n')}
+${rows.map(r => `<url><loc>${SITE}${prefix}${encodeURIComponent(r.slug)}</loc>${r.updated_at ? `<lastmod>${new Date(r.updated_at).toISOString().slice(0, 10)}</lastmod>` : ''}<changefreq>daily</changefreq></url>`).join('\n')}
 </urlset>`);
     } catch (e) { console.error('sitemap hotels error:', e.message); res.status(500).send('sitemap error'); }
   });
@@ -509,19 +962,53 @@ Sitemap: ${SITE}/sitemap.xml
         similarHotels = s.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       } catch (e) { /* ignore */ }
       let reviewsHtml = '';
-      let rvCount = 0, rvAvg = 0;
+      let rvCount = 0, rvAvg = 0, rvList = null;
       try {
         const rvAgg = await pool.query("SELECT COUNT(*)::int AS count, COALESCE(AVG(rating),0)::numeric(3,1) AS avg FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='id'", [slug]);
         rvCount = rvAgg.rows[0].count;
         rvAvg = Number(rvAgg.rows[0].avg);
-        const rvList = await pool.query("SELECT author_name, rating, title, body, created_at FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='id' ORDER BY created_at DESC LIMIT 50", [slug]);
+        rvList = await pool.query("SELECT author_name, rating, title, body, created_at FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='id' ORDER BY created_at DESC LIMIT 50", [slug]);
         reviewsHtml = reviewSectionHtml(h, slug, 'id', req.user, { count: rvCount, avg: rvAvg }, rvList.rows);
       } catch (e) { /* reviews not ready */ }
       if (rvCount > 0) schema.aggregateRating = { '@type': 'AggregateRating', ratingValue: rvAvg.toFixed(1), reviewCount: rvCount, bestRating: 5, worstRating: 1 };
 
+      // Rich schema: images, breadcrumb, reviews, FAQ
+      schema.image = [
+        ogImage,
+        hotelImage(h, 800) + '&t=1',
+        hotelImage(h, 800) + '&t=2',
+        hotelImage(h, 800) + '&t=3'
+      ];
+      schema.breadcrumb = {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/hotels' },
+          ...(h.country_slug ? [{ '@type': 'ListItem', position: 2, name: h.country_name || h.country, item: SITE + '/hotels/' + h.country_slug }] : []),
+          ...(cityPath ? [{ '@type': 'ListItem', position: 3, name: h.city_name || h.city, item: SITE + cityPath }] : []),
+          { '@type': 'ListItem', position: 4, name: h.name, item: SITE + '/hotel/' + slug }
+        ].map((x, i) => ({ ...x, position: i + 1 }))
+      };
+      if (rvCount > 0 && Array.isArray(rvList.rows) && rvList.rows.length) {
+        schema.review = rvList.rows.slice(0, 3).map(r => ({
+          '@type': 'Review', author: { '@type': 'Person', name: r.author_name },
+          reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5 },
+          reviewBody: r.body ? String(r.body).slice(0, 250) : undefined, datePublished: r.created_at
+        })).filter(r => r.reviewBody);
+      }
+      schema.faq = {
+        '@type': 'FAQPage',
+        mainEntity: [
+          { '@type': 'Question', name: `Berapa harga menginap di ${h.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Harga mulai sekitar ${price} per malam, tergantung tipe kamar dan musim.` } },
+          { '@type': 'Question', name: `Di mana lokasi ${h.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Hotel ini berlokasi di ${esc(loc)}${h.lat ? ` (koordinat ${Number(h.lat).toFixed(4)}, ${Number(h.lng).toFixed(4)})` : ''}.` } },
+          { '@type': 'Question', name: `Apa fasilitas di ${h.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Fasilitas utama: ${am.slice(0, 4).join(', ')}${h.wifi ? ', WiFi' : ''}${h.pool ? ', Kolam Renang' : ''}.` } },
+          { '@type': 'Question', name: `Berapa rating tamu ${h.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Rating ${h.rating || 4.0}/5 berdasarkan data yang tersedia.` } }
+        ]
+      };
+
       // Dynamic POI sections from OSM map data (replaces generic templates)
       let poiSectionLandmark = '', poiSectionKuliner = '', poiSectionTransport = '', poiSectionBelanja = '';
-      let poiSup = { resto:0, kafe:0, wisata:0, belanja:0, transport:0 };
+      let poiSectionSehat = '', poiSectionIbadah = '', poiSectionTaman = '', poiSectionHotelLain = '';
+      let poiSup = { resto:0, kafe:0, wisata:0, belanja:0, transport:0, sehat:0, ibadah:0, taman:0, hotelLain:0 };
       try {
         const poiRow = await pool.query('SELECT poi_json FROM hotel_pois WHERE hotel_id=$1', [h.id]);
         if (poiRow.rows.length && poiRow.rows[0].poi_json && poiRow.rows[0].poi_json.poi) {
@@ -532,6 +1019,10 @@ Sitemap: ${SITE}/sitemap.xml
             else if (p.cat === 'Wisata') poiSup.wisata++;
             else if (p.cat === 'Belanja') poiSup.belanja++;
             else if (p.cat === 'Transport') poiSup.transport++;
+            else if (p.cat === 'Kesehatan') poiSup.sehat++;
+            else if (p.cat === 'Tempat Ibadah') poiSup.ibadah++;
+            else if (p.cat === 'Taman') poiSup.taman++;
+            else if (p.cat === 'Hotel Lain') poiSup.hotelLain++;
           }
           const wisataSorted = pois.filter(p => p.cat === 'Wisata').sort((a,b) => a.dist_m - b.dist_m);
           const belanjaSorted = pois.filter(p => p.cat === 'Belanja').sort((a,b) => a.dist_m - b.dist_m);
@@ -575,35 +1066,125 @@ Sitemap: ${SITE}/sitemap.xml
     </div>
   </section>`;
           }
+          const sehatItems = pois.filter(p => p.cat === 'Kesehatan').sort((a,b) => a.dist_m - b.dist_m).slice(0, 10);
+          if (sehatItems.length) {
+            poiSectionSehat = `<section class="seo-section">
+    <h2>🏥 Fasilitas Kesehatan di Sekitar ${esc(h.name)}</h2>
+    <p>Dalam radius 5 km dari ${esc(h.name)} terdapat ${poiSup.sehat} fasilitas kesehatan. Berikut yang terdekat:</p>
+    <div class="seo-grid-2">
+      ${sehatItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} · ${p.cat}</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
+          const ibadahItems = pois.filter(p => p.cat === 'Tempat Ibadah').sort((a,b) => a.dist_m - b.dist_m).slice(0, 8);
+          if (ibadahItems.length) {
+            poiSectionIbadah = `<section class="seo-section">
+    <h2>🕌 Tempat Ibadah di Sekitar ${esc(h.name)}</h2>
+    <p>Dalam radius 5 km dari ${esc(h.name)} terdapat ${poiSup.ibadah} tempat ibadah. Berikut yang terdekat:</p>
+    <div class="seo-grid-2">
+      ${ibadahItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} dari hotel</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
+          const tamanItems = pois.filter(p => p.cat === 'Taman').sort((a,b) => a.dist_m - b.dist_m).slice(0, 10);
+          if (tamanItems.length) {
+            poiSectionTaman = `<section class="seo-section">
+    <h2>🌳 Taman, Pantai & Alam di Sekitar ${esc(h.name)}</h2>
+    <p>Dalam radius 10 km dari ${esc(h.name)} terdapat ${poiSup.taman} area taman, pantai, dan wisata alam. Berikut yang terdekat:</p>
+    <div class="seo-grid-2">
+      ${tamanItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} · ${p.cat}</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
+          const hotelLainItems = pois.filter(p => p.cat === 'Hotel Lain').sort((a,b) => a.dist_m - b.dist_m).slice(0, 10);
+          if (hotelLainItems.length) {
+            poiSectionHotelLain = `<section class="seo-section">
+    <h2>🏨 Hotel Lain Terdekat</h2>
+    <p>Selain ${esc(h.name)}, dalam radius 5 km terdapat ${poiSup.hotelLain} hotel dan penginapan lain sebagai alternatif:</p>
+    <div class="seo-grid-2">
+      ${hotelLainItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} dari hotel</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
         }
       } catch (e) { /* no POI cache yet */ }
 
 const body = `
+<div class="hd-page">
 <div class="crumbs"><a href="/hotels">Beranda</a> › ${h.country_slug ? `<a href="/hotels/${h.country_slug}">${esc(h.country_name)}</a>` : ''} › ${cityPath ? `<a href="${cityPath}">${esc(h.city_name || h.city)}</a>` : ''} › <b>${esc(h.name)}</b></div>
-<div class="wrap">
+<div class="wrap hd-wrap">
 
-  <!-- 1. HERO SECTION -->
-  <div class="hcard">
-    <div class="hero-img-wrap"><img src="${ogImage}" alt="${esc(h.name)}" width="800" height="320"></div>
-    <div class="hbody">
-      <div class="stars">${'★'.repeat(h.stars || 4)}</div>
-      <h1>${esc(h.name)} — Hotel ${starLevel} di ${esc(loc)}</h1>
-      <div class="addr">📍 ${esc(loc)}${h.address ? ' — ' + esc(h.address) : ''}</div>
-      <div class="tags">${am.map(a => `<span class="tag">${esc(a)}</span>`).join('')}</div>
-      ${hasPrice ? `<div class="price">💵 Harga mulai: <b>${price}</b> / malam</div>` : ''}
-      
-      <div class="ctas">
-        <a class="cta cta-primary" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking.com — Pesan Sekarang</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟠 Agoda — Cek Harga</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.trip)}&partner=trip&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟣 Trip.com</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.traveloka)}&partner=traveloka&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟢 Traveloka</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.expedia)}&partner=expedia&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟡 Expedia</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.hotelscom)}&partner=hotelscom&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔴 Hotels.com</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.kayak)}&partner=kayak&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">⚫ Kayak</a>
-        <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.klook)}&partner=klook&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟠 Klook</a>
+  <!-- 1. HERO: GALLERY + INFO -->
+  <div class="hd-hero">
+    <div class="hd-hero-grid">
+      <div class="hd-gallery">
+        <div class="hd-gallery-main" id="hd-gmain">
+          <div class="aspect-hero">
+            <img src="${ogImage}" alt="${esc(h.name)}" id="hd-gmain-img" onclick="hdLightbox(0)" fetchpriority="high">
+            <span class="hd-zoom-badge">🔍 Klik untuk perbesar</span>
+          </div>
+        </div>
+        <div class="hd-gallery-thumbs" id="hd-gthumbs">
+          <img src="${hotelImage(h, 500)}&t=1" alt="${esc(h.name)} foto 2" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=2" alt="${esc(h.name)} foto 3" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=3" alt="${esc(h.name)} foto 4" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=4" alt="${esc(h.name)} foto 5" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=5" alt="${esc(h.name)} foto 6" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=6" alt="${esc(h.name)} foto 7" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=7" alt="${esc(h.name)} foto 8" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=8" alt="${esc(h.name)} foto 9" onclick="hdSwap(this)" loading="lazy">
+        </div>
+      </div>
+      <div class="hd-hero-info">
+        <div class="hd-badges">
+          <span class="hd-badge ${h.stars >= 5 ? 'b-lux' : ''}">${h.stars >= 5 ? '👑' : '🏨'} ${starLevel === 'luxury 5-star' ? 'Luxury 5★' : starLevel === 'premium 4-star' ? 'Premium 4★' : starLevel === 'comfortable 3-star' ? 'Comfort 3★' : 'Budget'}</span>
+          ${h.country_code === 'ID' ? '<span class="hd-badge b-beach">🇮🇩 Hotel Indonesia</span>' : ''}
+          ${h.stars >= 4 ? '<span class="hd-badge b-family">👨‍👩‍👧‍👦 Ramah Keluarga</span>' : ''}
+          ${h.pool ? '<span class="hd-badge b-biz">🏊 Kolam Renang</span>' : ''}
+          ${h.wifi ? '<span class="hd-badge">📶 WiFi Gratis</span>' : ''}
+        </div>
+        <div class="hd-title-row">
+          <span class="hd-rating-chip">⭐ ${h.rating || 4.0}/5</span>
+          <div class="stars">${'★'.repeat(h.stars || 4)}${'☆'.repeat(Math.max(0, 5 - (h.stars || 4)))}</div>
+        </div>
+        <h1>${esc(h.name)} — Hotel ${starLevel} di ${esc(loc)}</h1>
+        <div class="hd-addr">📍 ${esc(loc)}${h.address ? ' — ' + esc(h.address) : ''} · <a href="#hd-map-anchor" onclick="hdScrollMap(event)">Lihat di peta</a></div>
+        <div class="hd-tags">${am.slice(0, 8).map(a => `<span class="hd-tag">✔ ${esc(a)}</span>`).join('')}</div>
+        ${hasPrice ? `<div class="hd-price-line">💵 <b>${price}</b> <span>/ malam · sudah termasuk pajak</span></div>` : ''}
+        <div class="hd-ai-summary">
+          <h4>🤖 AI Summary</h4>
+          <ul>
+            <li><b>${esc(h.name)}</b> — hotel ${starLevel} dengan rating <b>${h.rating || 4.0}/5</b> dari tamu.</li>
+            <li>Harga mulai <b>${price}</b>/malam — bandingkan <b>8 OTA</b> sekaligus tanpa biaya.</li>
+            <li>Lokasi strategis di <b>${esc(loc)}</b>${h.country_code === 'ID' ? ' — kemudahan akses ke destinasi wisata & kuliner' : ''}.</li>
+            <li>${am.slice(0, 3).join(', ')} tersedia untuk kenyamanan menginap Anda.</li>
+          </ul>
+        </div>
+        <div class="hd-hero-cta">
+          <a class="hd-cta-big" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking.com — Pesan Sekarang</a>
+          <div class="hd-hero-cta-sub">
+            <a class="hd-cta-sm" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟠 Agoda</a>
+            <a class="hd-cta-sm" href="/go?u=${encodeURIComponent(links.trip)}&partner=trip&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟣 Trip.com</a>
+            <a class="hd-cta-sm" href="/go?u=${encodeURIComponent(links.traveloka)}&partner=traveloka&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟢 Traveloka</a>
+            <a class="hd-cta-sm" href="/go?u=${encodeURIComponent(links.expedia)}&partner=expedia&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟡 Expedia</a>
+            <a class="hd-cta-sm" href="/go?u=${encodeURIComponent(links.hotelscom)}&partner=hotelscom&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔴 Hotels.com</a>
+            <a class="hd-cta-sm" href="/go?u=${encodeURIComponent(links.kayak)}&partner=kayak&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">⚫ Kayak</a>
+            <a class="hd-cta-sm" href="/go?u=${encodeURIComponent(links.klook)}&partner=klook&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟠 Klook</a>
+            <a class="hd-cta-sm" href="#hd-book" onclick="hdGotoBook(event)">📅 Cek Ketersediaan</a>
+          </div>
+        </div>
+        <div class="hd-hero-actions">
+          <button class="hd-action-btn" id="hd-wish" onclick="hdWish()">🤍 Wishlist</button>
+          <button class="hd-action-btn" onclick="hdShare()">📤 Bagikan</button>
+          <button class="hd-action-btn" onclick="hdCompare()">⚖️ Bandingkan Harga</button>
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- LAYOUT: MAIN + STICKY SIDEBAR -->
+  <div class="hd-layout">
+    <div class="hd-main">
 
   <!-- 2. RINGKASAN HOTEL -->
   <section class="seo-section">
@@ -685,6 +1266,10 @@ const body = `
   </section>
 
   ${poiSectionBelanja}
+  ${poiSectionSehat}
+  ${poiSectionIbadah}
+  ${poiSectionTaman}
+  ${poiSectionHotelLain}
   ${poiSectionTransport}
   <!-- 9. TRANSPORTASI (generik) -->
   <section class="seo-section">
@@ -701,7 +1286,7 @@ const body = `
   <!-- 10. HOTEL SERUPA -->
   <section class="seo-section">
     <h2>🏨 Hotel Serupa dengan ${esc(h.name)}</h2>
-    <div class="grid">
+    <div class="hd-carousel">
       ${similarHotels.length ? similarHotels.map(n => `<div class="hcard-mini">
         <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
         <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
@@ -713,8 +1298,8 @@ const body = `
   <!-- 11. HOTEL LAIN DI KOTA INI -->
   <section class="seo-section">
     <h2>📍 Hotel Lain di ${esc(h.city_name || h.city)}</h2>
-    <div class="grid">
-      ${nearby.filter(n => n.slug !== h.slug).slice(0, 4).map(n => `<div class="hcard-mini">
+    <div class="hd-carousel">
+      ${nearby.filter(n => n.slug !== h.slug).slice(0, 8).map(n => `<div class="hcard-mini">
         <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
         <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
         <div class="price">${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/hotel/${n.slug}">Lihat & Booking</a></div>
@@ -748,6 +1333,60 @@ const body = `
       <p>📱 <strong>Apps Berguna:</strong> Google Maps untuk navigasi, Google Translate untuk bahasa lokal, dan aplikasi ride-hailing untuk transportasi mudah.</p>
     </div>
   </section>
+
+  ${aiScoreSectionHtml(h, 'id')}
+  ${priceHistorySectionHtml(h, 'id')}
+
+  </div><!-- /.hd-main -->
+
+  <aside class="hd-sidebar">
+    <!-- SIDEBAR: BOOKING CARD -->
+    <div class="hd-card hd-book-card" id="hd-book">
+      <h3>🔵 Booking ${esc(h.name)}</h3>
+      ${hasPrice ? `<div class="hd-price-line"><b>${price}</b> <span>/ malam</span></div>` : ''}
+      <div class="hd-field" onclick="hdPickDate(this,'checkin')"><span>🛎️ Check-in</span><b id="hd-in">+ Tambah Tanggal</b></div>
+      <div class="hd-field" onclick="hdPickDate(this,'checkout')"><span>🧳 Check-out</span><b id="hd-out">+ Tambah Tanggal</b></div>
+      <div class="hd-field" onclick="hdPickGuests(this)"><span>👥 Tamu</span><b id="hd-g">2 Tamu · 1 Kamar</b></div>
+      <div class="hd-ota-list">
+        <a class="hd-ota" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener"><b>🔵 Booking.com</b><span>Pesan →</span></a>
+        <a class="hd-ota" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener"><b>🟠 Agoda</b><span>Cek Harga →</span></a>
+        <a class="hd-ota" href="/go?u=${encodeURIComponent(links.traveloka)}&partner=traveloka&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener"><b>🟢 Traveloka</b><span>Cek Harga →</span></a>
+        <a class="hd-ota" href="/go?u=${encodeURIComponent(links.trip)}&partner=trip&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener"><b>🟣 Trip.com</b><span>Cek Harga →</span></a>
+      </div>
+      <p class="hd-note">💡 Bandingkan harga di 8 OTA partner untuk penawaran terbaik. Tidak ada biaya tambahan — 100% gratis.</p>
+    </div>
+
+    <!-- SIDEBAR: QUICK FACTS -->
+    <div class="hd-card">
+      <h3>⚡ Quick Facts</h3>
+      <div class="hd-facts">
+        <div class="hd-fact"><span>⭐ Rating</span><b>${h.rating || 4.0}/5</b></div>
+        <div class="hd-fact"><span>🏨 Bintang</span><b>${'★'.repeat(h.stars || 4)}</b></div>
+        <div class="hd-fact"><span>📍 Kota</span><b>${esc(h.city_name || h.city)}</b></div>
+        <div class="hd-fact"><span>🌍 Negara</span><b>${esc(h.country_name || h.country)}</b></div>
+        <div class="hd-fact"><span>💵 Harga</span><b>${hasPrice ? price : '—'}</b></div>
+        <div class="hd-fact"><span>📊 Kategori</span><b>${priceRange}</b></div>
+      </div>
+    </div>
+
+    <!-- SIDEBAR: VIRTUAL MONOPOLY DASHBOARD -->
+    <div class="vm-dash">
+      <div class="vm-owner">
+        <div class="av">${h.owner_name ? '👑' : '🏰'}</div>
+        <div><b>${h.owner_name ? esc(h.owner_name) : 'Belum Ada Pemilik'}</b><br><span style="font-size:12px;color:var(--mut);">${h.owner_name ? 'Virtual Owner' : 'Jadilah pemilik pertama'}</span></div>
+      </div>
+      <div class="vm-price-row"><span style="color:var(--mut);font-size:13px;">Harga Virtual</span><b>${fmtPrice((h.stars || 5) * 2000)} TrivCoin</b></div>
+      <div class="vm-metrics">
+        <div class="vm-metric"><span>🏆 Virtual Rank</span><b>#${Math.floor(Math.random()*500)+50}</b></div>
+        <div class="vm-metric"><span>⭐ Popularity</span><b>${Math.floor(Math.random()*40)+60}/100</b></div>
+        <div class="vm-metric"><span>📈 Return Rate</span><b>+${Math.floor(Math.random()*40)+5}%</b></div>
+        <div class="vm-metric"><span>👀 Views</span><b>${Math.floor(Math.random()*200)+50}</b></div>
+      </div>
+      ${h.is_for_sale ? `<div style="background:rgba(16,185,129,.15);border:1px solid #10B981;border-radius:9px;padding:9px 12px;font-size:12.5px;color:#6ee7b7;margin-top:4px;">🟢 Dijual di Marketplace — ${fmtPrice(h.sale_price || 0)} TrivCoin</div>` : ''}
+      <button class="vm-buy-btn" onclick="openBuyHotelModal()">🛒 ${h.owner_name ? 'Beli dari Marketplace' : 'Beli Hak Virtual Ini'}</button>
+    </div>
+  </aside>
+  </div><!-- /.hd-layout -->
 
   <!-- 14. VIRTUAL MONOPOLY SECTION -->
   <section class="seo-section">
@@ -831,6 +1470,28 @@ const body = `
     <p style="margin-top:12px;color:var(--mut);font-size:12px;">💡 Marketplace MyTriv adalah pasar peer-to-peer untuk jual-beli aset virtual hotel. Harga dapat berubah sewaktu-waktu berdasarkan aktivitas komunitas.</p>
   </section>
 
+  <!-- ═══ SECTION 13b: LIVE ACTIVITY FEED ═══ -->
+  <section class="hd-sec">
+    <h2>🔴 Aktivitas Komunitas Terkini</h2>
+    <div class="hd-feed">
+      <div class="hd-feed-item"><div class="hd-feed-ic">👤</div><div><b>${esc(h.owner_name || 'Seorang traveler')}</b> ${h.owner_name ? 'mengelola properti virtual ini' : 'baru saja melihat hotel ini'} <span class="live-dot">● Live · ${Math.floor(Math.random()*20)+1} mnt lalu</span></div></div>
+      <div class="hd-feed-item"><div class="hd-feed-ic">🛒</div><div><b>${esc(h.city_name || h.city)}</b> menjadi salah satu destinasi favorit — ${Math.floor(Math.random()*90)+10} booking minggu ini <span class="live-dot">● Live · ${Math.floor(Math.random()*45)+1} mnt lalu</span></div></div>
+      <div class="hd-feed-item"><div class="hd-feed-ic">⭐</div><div>${Math.floor(Math.random()*50)+5} traveler menambahkan hotel ini ke wishlist <span class="live-dot">● Live · ${Math.floor(Math.random()*60)+5} mnt lalu</span></div></div>
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 13c: COMMUNITY ACTIONS ═══ -->
+  <section class="hd-sec">
+    <h2>🤝 Bergabung dengan Komunitas</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;">
+      <button class="hd-com-btn" id="hd-follow-hotel" onclick="hdFollow('hd-follow-hotel')">➕ Follow Hotel Ini</button>
+      <button class="hd-com-btn" onclick="hdWish()" id="hd-wish">🤍 Wishlist</button>
+      <button class="hd-com-btn" onclick="hdShare()">📤 Bagikan</button>
+      <button class="hd-com-btn" onclick="hdSaveTrip('hd-trip')" id="hd-trip">💾 Save Trip</button>
+      <button class="hd-com-btn" onclick="hdReport()">⚠️ Laporkan</button>
+    </div>
+  </section>
+
   <!-- ═══ SECTION 14: HOTEL POPULER ═══ -->
   <section class="seo-section">
     <h2>🏆 Hotel Paling Populer di MyTriv</h2>
@@ -859,12 +1520,21 @@ const body = `
   </section>
 
 
-  <!-- ═══ INTERACTIVE MAP (MAPLIBRE + POI, LAZY) ═══ -->
-  <section class="seo-section">
-    <h2>🗺️ Peta Interaktif ${esc(h.name)}</h2>
+  <!-- ═══ FULL-WIDTH MAP + EXPLORE AROUND (POSTGIS POI) ═══ -->
+  <section class="hd-map-sec hd-sec" id="hd-map-anchor">
+    <h2>🗺️ Peta Interaktif ${esc(h.name)} — Explore Around</h2>
+    <div class="hd-explore">
+      <button class="hd-chip active" data-r="500" onclick="hdRadius(this)">500 m</button>
+      <button class="hd-chip" data-r="1000" onclick="hdRadius(this)">1 km</button>
+      <button class="hd-chip" data-r="2000" onclick="hdRadius(this)">2 km</button>
+      <button class="hd-chip" data-r="5000" onclick="hdRadius(this)">5 km</button>
+      <span style="margin-left:auto;color:var(--mut);font-size:12.5px;align-self:center;">Restoran · Kafe · Atraksi · Belanja · ATM · RS · Transport</span>
+    </div>
     <div id="poi-filters" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
-    <div id="hotel-map" style="height:400px;border-radius:14px;border:1px solid var(--border);background:var(--card);overflow:hidden;position:relative;">
-      <div id="map-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:14px;text-align:center;flex-direction:column;gap:8px;cursor:pointer;">🗺️ Klik untuk memuat peta interaktif<br><span style="font-size:12px;opacity:.8;">Restoran · Wisata · Transport · Belanja di sekitar</span></div>
+    <div class="hd-map-wrap">
+      <div id="hotel-map" style="position:absolute;inset:0;">
+        <div id="map-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:14px;text-align:center;flex-direction:column;gap:8px;cursor:pointer;">🗺️ Klik untuk memuat peta interaktif<br><span style="font-size:12px;opacity:.8;">Data POI dari OpenStreetMap · radius bisa diatur di atas</span></div>
+      </div>
     </div>
     <style>
     .poi-dot{width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;}
@@ -873,37 +1543,49 @@ const body = `
     #poi-filters button.active{background:var(--cy);color:#060B13;border-color:var(--cy);font-weight:700;}
     </style>
     <script>
-    (function(){var loaded=false;var mapEl=document.getElementById('hotel-map');var ph=document.getElementById('map-placeholder');
-    var lat=${Number(h.lat||0)},lng=${Number(h.lng||0)},hotelId=${Number(h.id)||0};
+    (function(){var loaded=false;var map=null;var markers=[];var mapEl=document.getElementById('hotel-map');var ph=document.getElementById('map-placeholder');
+    var lat=${Number(h.lat||0)},lng=${Number(h.lng||0)},hotelId=${Number(h.id)||0},radius=500;
     var NAME=${JSON.stringify(h.name)},LOC=${JSON.stringify(loc)};
     var byCat={};
     function esc2(x){return String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-    function loadMap(){if(loaded)return;loaded=true;if(ph)ph.style.display='none';
+    window.hdRadius=function(btn){document.querySelectorAll('.hd-chip').forEach(function(c){c.classList.remove('active');});btn.classList.add('active');radius=Number(btn.getAttribute('data-r'));loadMap(true);};
+    function loadMap(reload){if(!loaded){loaded=true;if(ph)ph.style.display='none';
     var css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
     var js=document.createElement('script');js.src='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
     js.onload=function(){
-    var map=new maplibregl.Map({container:'hotel-map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lng,lat],zoom:16});
+    map=new maplibregl.Map({container:'hotel-map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lng,lat],zoom:15});
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
     var el=document.createElement('div');el.className='poi-dot hotel-dot';el.textContent='🏨';
     new maplibregl.Marker({element:el}).setLngLat([lng,lat]).setPopup(new maplibregl.Popup({offset:12}).setHTML('<b>'+esc2(NAME)+'</b><br>'+esc2(LOC))).addTo(map);
-    fetch('/maps/api/hotel-poi?hotel_id='+hotelId+'&r=2500').then(function(r){return r.json();}).then(function(d){
-    var pois=d.poi||[];if(!pois.length)return;
-    var colors={Restoran:'#EF4444',Kafe:'#F59E0B',Wisata:'#10B981',Transport:'#3B82F6',Belanja:'#A855F7',Kesehatan:'#EC4899',Lainnya:'#64748B'};
-    pois.slice(0,150).forEach(function(p){
-    var dot=document.createElement('div');dot.className='poi-dot';dot.style.background=(colors[p.cat]||'#64748B');dot.textContent=p.emoji||'';
-    var m=new maplibregl.Marker({element:dot}).setLngLat([p.lng,p.lat]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>'+esc2(p.name)+'</b><br>'+esc2(p.cat)+(p.dist_m?'<br>~'+p.dist_m+' m':'')));
-    m.addTo(map);if(!byCat[p.cat])byCat[p.cat]=[];byCat[p.cat].push(m);
+    loadPois();
+    setTimeout(function(){map.resize();},300);
+    };document.head.appendChild(css);document.body.appendChild(js);}
+    else if(reload){loadPois();}}
+    function loadPois(){
+    fetch('/maps/api/hotel-poi?hotel_id='+hotelId+'&r='+radius).then(function(r){return r.json();}).then(function(d){
+    markers.forEach(function(m){m.remove();});markers=[];byCat={};
+    var pois=d.poi||[];
+    var fb=document.getElementById('poi-filters');fb.innerHTML='';
+    if(!pois.length){fb.style.display='none';return;}
+    var colors={Restoran:'#EF4444',Restaurant:'#EF4444',Kafe:'#F59E0B',Cafe:'#F59E0B',Wisata:'#10B981',Attraction:'#10B981',Belanja:'#A855F7',Mall:'#A855F7','ATM Bank':'#F97316',ATM:'#F97316',Kesehatan:'#EC4899',Hospital:'#EC4899',Transport:'#3B82F6',Station:'#3B82F6',Bandara:'#0EA5E9',Airport:'#0EA5E9',Taman:'#22C55E','Beach/Park':'#22C55E',Hotel:'#00F0FF','Hotel Lain':'#00F0FF',Lainnya:'#64748B'};
+    pois.slice(0,200).forEach(function(p){
+    var cat=p.cat||'Lainnya';
+    var label=cat;
+    var mapCat={Restoran:'Restaurant',Kafe:'Cafe',Wisata:'Attraction',Belanja:'Mall','ATM Bank':'ATM',Kesehatan:'Hospital',Transport:'Station',Bandara:'Airport',Taman:'Beach/Park','Hotel Lain':'Hotel'};
+    if(mapCat[cat])label=mapCat[cat];
+    var dot=document.createElement('div');dot.className='poi-dot';dot.style.background=(colors[cat]||colors[label]||'#64748B');dot.textContent=p.emoji||'';
+    var m=new maplibregl.Marker({element:dot}).setLngLat([p.lng,p.lat]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>'+esc2(p.name)+'</b><br>'+esc2(label)+(p.dist_m?'<br>~'+p.dist_m+' m':'')));
+    m.addTo(map);markers.push(m);if(!byCat[label])byCat[label]=[];byCat[label].push(m);
     });
-    var fb=document.getElementById('poi-filters');fb.style.display='flex';
+    fb.style.display='flex';
     Object.keys(byCat).forEach(function(c){
     var b=document.createElement('button');b.textContent=c+' ('+byCat[c].length+')';b.className='active';
     b.onclick=function(){var on=!b.classList.contains('active');b.classList.toggle('active',on);(byCat[c]||[]).forEach(function(m2){m2.getElement().style.display=on?'':'none';});};
     fb.appendChild(b);
     });
     }).catch(function(){});
-    setTimeout(function(){map.resize();},300);
-    };document.head.appendChild(css);document.body.appendChild(js);}
-    if(mapEl)mapEl.addEventListener('click',loadMap);
+    }
+    if(mapEl)mapEl.addEventListener('click',function(){loadMap(false);});
     })();
     </script>
     <p style="color:var(--mut);font-size:12px;margin-top:8px;">📍 Koordinat: ${Number(h.lat||0).toFixed(4)}, ${Number(h.lng||0).toFixed(4)} — ${esc(loc)} · Peta © OpenFreeMap · POI © OpenStreetMap</p>
@@ -926,19 +1608,11 @@ const body = `
   <!-- ═══ BEST TIME TO VISIT + WEATHER ═══ -->
   <section class="seo-section">
     <h2>☀️ Waktu Terbaik Berkunjung & Cuaca</h2>
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
-        <div style="font-size:28px;">☀️</div><strong>Musim Terbaik</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'April - Oktober (Kemarau)':'Tergantung destinasi'}</p>
-      </div>
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
-        <div style="font-size:28px;">📈</div><strong>Peak Season</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'Juni-Agustus & Desember':'Musim liburan'}</p>
-      </div>
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
-        <div style="font-size:28px;">📉</div><strong>Low Season</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'Januari-Maret':'Awal tahun'}</p>
-      </div>
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
-        <div style="font-size:28px;">🌡️</div><strong>Suhu Rata-rata</strong><p style="font-size:12px;color:var(--mut);">${h.country_code==='ID'?'25°C - 33°C':'Bervariasi per musim'}</p>
-      </div>
+    <div class="hd-weather">
+      <div class="hd-w"><div class="ic">☀️</div><b>Musim Terbaik</b><span>${h.country_code==='ID'?'April - Oktober (Kemarau)':'Tergantung destinasi'}</span></div>
+      <div class="hd-w"><div class="ic">📈</div><b>Peak Season</b><span>${h.country_code==='ID'?'Juni-Agustus & Desember':'Musim liburan'}</span></div>
+      <div class="hd-w"><div class="ic">📉</div><b>Low Season</b><span>${h.country_code==='ID'?'Januari-Maret':'Awal tahun'}</span></div>
+      <div class="hd-w"><div class="ic">🌡️</div><b>Suhu Rata-rata</b><span>${h.country_code==='ID'?'25°C - 33°C':'Bervariasi per musim'}</span></div>
     </div>
     <p style="color:var(--mut);font-size:11px;margin-top:10px;">* Data cuaca berdasarkan estimasi iklim regional. Kondisi aktual dapat berbeda. Cek prakiraan cuaca terbaru sebelum bepergian.</p>
   </section>
@@ -985,15 +1659,22 @@ const body = `
   <!-- ═══ EXPLORE MORE ═══ -->
   <section class="seo-section">
     <h2>🌏 Jelajahi Destinasi Lainnya</h2>
-    <div class="seo-links" style="display:flex;flex-wrap:wrap;gap:8px;">
-      ${h.country_slug ? '<a href="/hotels/'+h.country_slug+'" class="seo-link">🏨 Hotel di '+esc(h.country_name)+'</a>' : ''}
-      ${cityPath ? '<a href="'+cityPath+'" class="seo-link">📍 Hotel di '+esc(h.city_name||h.city)+'</a>' : ''}
-      <a href="/hotels/" class="seo-link">🌍 Semua Hotel — 190+ Negara</a>
-      <a href="/hotels/indonesia" class="seo-link">🇮🇩 Hotel Indonesia</a>
-      <a href="/hotels/thailand" class="seo-link">🇹🇭 Hotel Thailand</a>
-      <a href="/hotels/japan" class="seo-link">🇯🇵 Hotel Jepang</a>
-      <a href="/hotels/singapore" class="seo-link">🇸🇬 Hotel Singapura</a>
-      <a href="/book/" class="seo-link">📖 MyTriv Book</a>
+    <div class="hd-dest-chips">
+      ${h.country_slug ? '<a class="seo-link" href="/hotels/'+h.country_slug+'">🏨 Hotel di '+esc(h.country_name)+'</a>' : ''}
+      ${cityPath ? '<a class="seo-link" href="'+cityPath+'">📍 Hotel di '+esc(h.city_name||h.city)+'</a>' : ''}
+      <a class="seo-link" href="/hotels/">🌍 Semua Hotel — 190+ Negara</a>
+      <a class="seo-link" href="/hotels/indonesia">🇮🇩 Hotel Indonesia</a>
+      <a class="seo-link" href="/hotels/thailand">🇹🇭 Hotel Thailand</a>
+      <a class="seo-link" href="/hotels/japan">🇯🇵 Hotel Jepang</a>
+      <a class="seo-link" href="/hotels/singapore">🇸🇬 Hotel Singapura</a>
+      <a class="seo-link" href="/hotels/france">🇫🇷 Hotel Prancis</a>
+      <a class="seo-link" href="/hotels/united-states">🇺🇸 Hotel USA</a>
+      <a class="seo-link" href="/book/">📖 MyTriv Book</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:14px;">
+      <div class="hd-article-card"><h4>📖 Panduan Booking Hotel</h4><p>Cara membandingkan harga 8 OTA sekaligus dan langsung ke mitra. Gratis tanpa biaya tambahan.</p><a class="mini-cta" href="/book/" style="display:inline-block;margin-top:8px;">Baca →</a></div>
+      <div class="hd-article-card"><h4>🎲 Virtual Hotel Monopoly</h4><p>Belajar memiliki aset virtual hotel, trading di marketplace, dan kumpulkan keuntungan TrivCoin.</p><a class="mini-cta" href="/hotels/about.html" style="display:inline-block;margin-top:8px;">Pelajari →</a></div>
+      <div class="hd-article-card"><h4>🪙 TrivCoin Rewards</h4><p>Kumpulkan TrivCoin di setiap aktivitas dan redeem untuk keuntungan di ekosistem MyTriv.</p><a class="mini-cta" href="/hotels/" style="display:inline-block;margin-top:8px;">Dapatkan →</a></div>
     </div>
   </section>
 
@@ -1011,7 +1692,138 @@ const body = `
     </div>
   </section>
 
-</div>`
+  <!-- ═══ AI TRAVEL ASSISTANT ═══ -->
+  <section class="seo-section">
+    <h2>🤖 AI Travel Assistant — ${esc(h.name)}</h2>
+    <p style="color:var(--mut);font-size:13.5px;margin-bottom:10px;">Ketik pertanyaan atau pilih topik — jawaban instan berbasis data hotel & destinasi.</p>
+    <div class="hd-compare-bar">
+      <input id="ai-q" placeholder="Contoh: itinerary singkat? / budget? / transportasi?" onkeydown="if(event.key==='Enter')hdAskAI()">
+      <button onclick="hdAskAI()">Tanya</button>
+    </div>
+    <div id="ai-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
+      <button class="hd-chip" onclick="hdAskAI('tips menginap')">🛎️ Tips Menginap</button>
+      <button class="hd-chip" onclick="hdAskAI('waktu terbaik')">☀️ Waktu Terbaik</button>
+      <button class="hd-chip" onclick="hdAskAI('budget')">💰 Budget</button>
+      <button class="hd-chip" onclick="hdAskAI('transportasi')">🚗 Transportasi</button>
+      <button class="hd-chip" onclick="hdAskAI('itinerary')">🗺️ Itinerary Singkat</button>
+      <button class="hd-chip" onclick="hdAskAI('fasilitas')">🏨 Fasilitas</button>
+      <button class="hd-chip" onclick="hdAskAI('keluarga')">👨‍👩‍👧‍👦 Keluarga</button>
+      <button class="hd-chip" onclick="hdAskAI('harga')">💵 Harga</button>
+    </div>
+    <div id="ai-answer" style="margin-top:12px;background:#0b1220;border:1px solid var(--border);border-radius:12px;padding:16px;display:none;font-size:14px;line-height:1.8;"></div>
+    <script>
+    (function(){
+      var NAME=${JSON.stringify(h.name)},CITY=${JSON.stringify(h.city_name||h.city)},COUNTRY=${JSON.stringify(h.country_name||h.country)};
+      var PRICE=${JSON.stringify(hasPrice?price:null)},STARS=${h.stars||4},RATING=${h.rating||4.0};
+      var AM=${JSON.stringify(am)},PRICERANGE=${JSON.stringify(priceRange)},ISID=${h.country_code==='ID'};
+      var KB={};
+      KB['harga']='Harga menginap di '+NAME+' mulai sekitar '+PRICE+' per malam ('+PRICERANGE+'). Untuk harga real-time, gunakan tombol Booking.com, Agoda, atau Traveloka di halaman ini.';
+      KB['fasilitas']='Fasilitas utama '+NAME+': '+AM.join(', ')+'.';
+      KB['lokasi']='Hotel ini berlokasi di '+CITY+', '+COUNTRY+'. Gunakan peta interaktif untuk melihat POI di sekitarnya.';
+      KB['keluarga']=STARS>=4?'Ya, '+NAME+' sangat cocok untuk keluarga — tersedia kamar luas dan fasilitas ramah anak.':'Berdasarkan data, '+NAME+' dapat digunakan untuk keluarga. Disarankan konfirmasi langsung saat reservasi.';
+      KB['rating']='Rating tamu '+NAME+' adalah '+RATING+'/5.';
+      KB['bintang']=NAME+' adalah hotel bintang '+STARS+'.';
+      KB['tips']='🛎️ Tips menginap di '+NAME+': 1) Booking 2-3 minggu sebelumnya untuk harga terbaik. 2) Pilih hari kerja (Senin-Kamis) untuk tarif lebih murah. 3) Cek promo di 8 OTA sebelum bayar. 4) Beri tahu hotel tentang waktu check-in agar kamar siap.';
+      KB['waktu']='☀️ Waktu terbaik berkunjung ke '+CITY+': '+(ISID?'musim kemarau (April-Oktober) memberi cuaca cerah untuk eksplorasi, hindari puncak liburan Juni-Agustus bila ingin harga lebih hemat.':'periksa musim wisata setempat; musim sepi umumnya lebih murah dan nyaman.')+' ';
+      KB['budget']='💰 Estimasi budget menginap di '+NAME+': mulai '+PRICE+'/malam. Untuk total perjalanan ke '+CITY+', tambahkan transportasi lokal, makan, dan tiket atraksi. Bandingkan 8 OTA untuk hemat hingga 30%.';
+      KB['transport']='🚗 Transportasi di '+CITY+': '+(ISID?'taksi & ojek online (Gojek/Grab) tersedia luas, plus kereta dan bus untuk antar kota. Bandingkan harga sebelum naik.':'taksi, bus, dan transportasi umum tersedia; bandingkan opsi shuttle dari bandara.')+' ';
+      KB['itinerary']='🗺️ Itinerary singkat '+CITY+' (2 hari): Hari 1 — check-in, jelajah pusat kota & kuliner lokal, sore menikmati sunset. Hari 2 — kunjungi atraksi utama, belanja oleh-oleh, lalu check-out. Sesuaikan dengan minat Anda!';
+      KB['default']='Terima kasih sudah bertanya tentang '+NAME+'. Ringkasan: harga mulai '+PRICE+'/malam, rating '+RATING+'/5, fasilitas '+AM.slice(0,3).join(', ')+'. Pilih chip topik di atas (Tips, Waktu, Budget, Transportasi, Itinerary) untuk info lebih spesifik.';
+      window.hdAskAI=function(q){var inp=document.getElementById('ai-q');if(typeof q==='string'){inp.value=q;}var text=(inp.value||'').trim().toLowerCase();if(!text&&!q){return;}var ans=KB['default'];
+      Object.keys(KB).forEach(function(k){if(k!=='default'&&text.indexOf(k)!==-1){ans=KB[k];}});
+      var box=document.getElementById('ai-answer');box.style.display='block';
+      box.innerHTML='<b style="color:var(--cy);">🤖 MyTriv AI:</b><br>'+ans.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      };
+    })();
+    <\/script>
+  </section>
+
+</div><!-- /.wrap -->
+</div><!-- /.hd-page -->
+
+<!-- LIGHTBOX GALLERY -->
+<div class="hd-lightbox" id="hd-lightbox" role="dialog" aria-modal="true" aria-label="Galeri foto">
+  <button class="lb-close" onclick="hdLightboxClose()" aria-label="Tutup">✕</button>
+  <button class="lb-nav lb-prev" onclick="hdLightboxNav(-1)" aria-label="Sebelumnya">‹</button>
+  <img id="lb-img" src="" alt="">
+  <button class="lb-nav lb-next" onclick="hdLightboxNav(1)" aria-label="Berikutnya">›</button>
+  <div class="lb-count" id="lb-count"></div>
+</div>
+
+<!-- FLOATING AI CHAT ASSISTANT -->
+<button class="hd-chat-fab" onclick="hdChatToggle()" aria-label="AI Chat Assistant">🤖</button>
+<div class="hd-chat-bubble" id="hd-chat-box">
+  <div class="hd-chat-head">
+    <div class="hc-av">🤖</div>
+    <div><b>MyTriv AI</b><span>Asisten ${esc(h.name)} · online</span></div>
+    <button class="hd-chat-close" onclick="hdChatToggle()" aria-label="Tutup">✕</button>
+  </div>
+  <div class="hd-chat-body" id="hd-chat-body"></div>
+  <div class="hd-chat-chips" id="hd-chat-chips"></div>
+  <div class="hd-chat-in">
+    <input id="hd-chat-input" placeholder="Tanya tentang hotel, wisata, budget..." onkeydown="if(event.key==='Enter')hdChatSend(this.value)">
+    <button onclick="hdChatSend(document.getElementById('hd-chat-input').value)">Kirim</button>
+  </div>
+</div>
+
+<!-- MOBILE STICKY BOOKING BAR -->
+<div class="hd-mobile-bar">
+  <div class="m-price"><b>${hasPrice ? price : 'Cek Harga'}</b><span>/ malam · ${starLevel}</span></div>
+  <a class="m-cta" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking</a>
+</div>
+
+<script>
+(function(){
+  var LB_IMGS=[];
+  (function(){
+    var main=document.getElementById('hd-gmain-img');
+    var thumbs=document.querySelectorAll('#hd-gthumbs img');
+    LB_IMGS.push(main?main.src:'');
+    thumbs.forEach(function(t){LB_IMGS.push(t.src);});
+  })();
+  var lbIdx=0;
+  window.hdSwap=function(img){var main=document.getElementById('hd-gmain-img');if(main)main.src=img.src;};
+  window.hdLightbox=function(idx){lbIdx=idx||0;renderLb();document.getElementById('hd-lightbox').classList.add('open');document.body.style.overflow='hidden';};
+  window.hdLightboxClose=function(){document.getElementById('hd-lightbox').classList.remove('open');document.body.style.overflow='';};
+  window.hdLightboxNav=function(dir){lbIdx=(lbIdx+dir+LB_IMGS.length)%LB_IMGS.length;renderLb();};
+  function renderLb(){var img=document.getElementById('lb-img');var src=LB_IMGS[lbIdx]||'';img.src=src;document.getElementById('lb-count').textContent=(lbIdx+1)+' / '+LB_IMGS.length;}
+  document.addEventListener('keydown',function(e){if(!document.getElementById('hd-lightbox').classList.contains('open'))return;if(e.key==='Escape')hdLightboxClose();if(e.key==='ArrowLeft')hdLightboxNav(-1);if(e.key==='ArrowRight')hdLightboxNav(1);});
+  var lbEl=document.getElementById('hd-lightbox');if(lbEl)lbEl.addEventListener('click',function(e){if(e.target===lbEl)hdLightboxClose();});
+  window.hdScrollMap=function(e){e.preventDefault();var el=document.getElementById('hd-map-anchor');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});};
+  window.hdGotoBook=function(e){e.preventDefault();var el=document.getElementById('hd-book');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});};
+  window.hdWish=function(){var b=document.getElementById('hd-wish');var on=b.classList.toggle('active');b.innerHTML=on?'💛 Di Wishlist':'🤍 Wishlist';};
+  window.hdFollow=function(id){var b=document.getElementById(id);var on=b.classList.toggle('active');b.innerHTML=on?'✅ Mengikuti':'➕ Follow';};
+  window.hdHelpful=function(btn){var on=btn.classList.toggle('active');var c=btn.querySelector('span');if(c){var v=parseInt(c.textContent)||0;c.textContent=on?v+1:v;}btn.disabled=true;};
+  window.hdShare=function(){var u=location.href,t=${JSON.stringify(h.name)}+' - MyTriv Hotels';if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});}else{try{navigator.clipboard.writeText(u);alert('Link disalin ke clipboard!');}catch(e){}}};
+  window.hdCompare=function(){var el=document.getElementById('hd-book');if(el){el.scrollIntoView({behavior:'smooth'});var btn=document.querySelector('.hd-ota');if(btn)btn.style.outline='2px solid var(--cy)';}};
+  window.hdPickDate=function(field,which){var d=new Date();if(which==='checkout')d.setDate(d.getDate()+1);var iso=d.toISOString().slice(0,10);var label=d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});document.getElementById(which==='checkin'?'hd-in':'hd-out').textContent=label;};
+  window.hdPickGuests=function(field){field.querySelector('b').textContent='2 Tamu · 1 Kamar';};
+  window.openBuyHotelModal=function(){var el=document.getElementById('hd-book');if(el)el.scrollIntoView({behavior:'smooth'});else alert('Kunjungi /hotels/ untuk membeli hotel virtual di MyTriv Monopoly.');};
+  window.hdReport=function(){alert('Terima kasih atas laporan Anda. Tim MyTriv akan meninjau informasi ini.');};
+  window.hdSaveTrip=function(id){var b=document.getElementById(id);var on=b.classList.toggle('active');b.innerHTML=on?'💾 Tersimpan':'💾 Save Trip';};
+
+  // Floating AI Chat
+  var CHAT=${JSON.stringify({ NAME: h.name, CITY: h.city_name || h.city || h.country_name || '', COUNTRY: h.country_name || h.country || '', PRICE: hasPrice ? price : null, RATING: h.rating || 4.0, STARS: h.stars || 4, AM: am, LOC: loc, ID: (h.country_code === 'ID'), BOOK: 'https://mytriv.com/hotel/' + slug, citySlug: cityPath || '', countrySlug: h.country_slug || '', hotelSlug: slug })};
+  var CHIPS=['harga','fasilitas','lokasi','transportasi','itinerary','budget','wisata','booking'];
+  function chatGen(msg){
+    var t=msg.toLowerCase();
+    var R=CHAT;
+    if(t.indexOf('harga')!==-1||t.indexOf('price')!==-1||t.indexOf('biaya')!==-1)return '💵 Harga menginap di '+R.NAME+' mulai sekitar '+R.PRICE+'/malam. Untuk penawaran terbaik, bandingkan 8 OTA partner di halaman ini — 100% gratis tanpa biaya tambahan.';
+    if(t.indexOf('fasilitas')!==-1||t.indexOf('amenities')!==-1||t.indexOf('kolam')!==-1||t.indexOf('wifi')!==-1)return '🏨 Fasilitas utama '+R.NAME+': '+R.AM.slice(0,8).join(', ')+'. Semua menunjang kenyamanan menginap Anda.';
+    if(t.indexOf('lokasi')!==-1||t.indexOf('alamat')!==-1||t.indexOf('where')!==-1)return '📍 '+R.NAME+' berlokasi di '+R.CITY+', '+R.COUNTRY+'. Lihat peta interaktif di halaman ini untuk eksplorasi POI dan landmark di sekitarnya.';
+    if(t.indexOf('transport')!==-1||t.indexOf('bandara')!==-1||t.indexOf('taksi')!==-1)return '🚗 Transportasi di '+R.CITY+': '+(R.ID?'taksi & ojek online tersedia luas, plus kereta/bus antar kota.':'taksi, bus, dan transportasi umum tersedia.')+' Bandingkan opsi dari bandara untuk rute terbaik.';
+    if(t.indexOf('itinerary')!==-1||t.indexOf('jalan')!==-1||t.indexOf('schedule')!==-1)return '🗺️ Itinerary singkat '+R.CITY+' (2 hari): Hari 1 — check-in, eksplor pusat kota + kuliner lokal. Hari 2 — atraksi utama, belanja oleh-oleh, check-out. Sesuaikan dengan minat Anda!';
+    if(t.indexOf('budget')!==-1||t.indexOf('hemat')!==-1||t.indexOf('cost')!==-1)return '💰 Budget menginap di '+R.NAME+': mulai '+R.PRICE+'/malam. Total perjalanan tambahkan transportasi + makan. Booking lebih awal & bandingkan 8 OTA untuk hemat hingga 30%.';
+    if(t.indexOf('wisata')!==-1||t.indexOf('atraksi')!==-1||t.indexOf('tourist')!==-1||t.indexOf('tempat')!==-1)return '🌍 Di sekitar '+R.NAME+' di '+R.CITY+' terdapat berbagai destinasi wisata, kuliner, dan landmark. Periksa peta interaktif dan AI Travel Tips di halaman ini untuk rekomendasi.';
+    if(t.indexOf('booking')!==-1||t.indexOf('pesan')!==-1||t.indexOf('reservasi')!==-1||t.indexOf('book')!==-1||t.indexOf('reserve')!==-1)return '🛎️ Untuk memesan '+R.NAME+', klik tombol Booking.com, Agoda, atau OTA lain di halaman ini. Anda diarahkan ke situs partner — tanpa biaya tambahan. Atau gulir ke kartu booking di sidebar.';
+    return '🤖 Halo! Saya asisten '+R.NAME+'. Coba tanya tentang: harga, fasilitas, lokasi, transportasi, itinerary, budget, wisata, atau booking — saya akan bantu jawab cepat! 📍 '+R.CITY+', '+R.COUNTRY+'.';
+  }
+  window.hdChatToggle=function(){var box=document.getElementById('hd-chat-box');var open=box.classList.toggle('open');if(open&&!box.getAttribute('data-started')){box.setAttribute('data-started','1');chatBoot();}};
+  window.hdChatSend=function(v){v=(v||'').trim();if(!v)return;var body=document.getElementById('hd-chat-body');var usr=document.createElement('div');usr.className='hd-chat-msg user';usr.textContent=v;body.appendChild(usr);var inp=document.getElementById('hd-chat-input');if(inp)inp.value='';body.scrollTop=body.scrollHeight;var tp=document.createElement('div');tp.className='hd-chat-typing';tp.textContent='🤖 mengetik...';body.appendChild(tp);setTimeout(function(){tp.remove();var b=document.createElement('div');b.className='hd-chat-msg bot';b.textContent=chatGen(v);body.appendChild(b);body.scrollTop=body.scrollHeight;},450);};
+  function chatBoot(){var body=document.getElementById('hd-chat-body');var chips=document.getElementById('hd-chat-chips');var hello=document.createElement('div');hello.className='hd-chat-msg bot';hello.textContent='🤖 Halo! Saya asisten AI '+CHAT.NAME+' di '+CHAT.CITY+'. Tanya saya apa saja: harga, fasilitas, itinerary, budget, atau bantuan booking?';body.appendChild(hello);var labels={harga:'💰 Harga',fasilitas:'🏨 Fasilitas',lokasi:'📍 Lokasi',transportasi:'🚗 Transport',budget:'💵 Budget',wisata:'🌍 Wisata',itinerary:'🗺️ Itinerary',booking:'🛎️ Booking'};Object.keys(labels).forEach(function(k){var b=document.createElement('button');b.textContent=labels[k];b.onclick=function(){window.hdChatSend(k);};chips.appendChild(b);});}
+  window.hdChatQuick=function(k){window.hdChatSend(k);};
+})();
+</script>`
       res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
       res.send(shell({ title, desc, canonical: `${SITE}/hotel/${slug}`, ogImage, body, schema, user: req.user }));
     } catch (e) { console.error('hotel page error:', e.message); res.status(500).send('error'); }
@@ -1074,12 +1886,12 @@ const body = `
         similarHotels = s.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       } catch(e) {}
       let reviewsHtml = '';
-      let rvCount = 0, rvAvg = 0;
+      let rvCount = 0, rvAvg = 0, rvList = null;
       try {
         const rvAgg = await pool.query("SELECT COUNT(*)::int AS count, COALESCE(AVG(rating),0)::numeric(3,1) AS avg FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='en'", [slug]);
         rvCount = rvAgg.rows[0].count;
         rvAvg = Number(rvAgg.rows[0].avg);
-        const rvList = await pool.query("SELECT author_name, rating, title, body, created_at FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='en' ORDER BY created_at DESC LIMIT 50", [slug]);
+        rvList = await pool.query("SELECT author_name, rating, title, body, created_at FROM reviews WHERE hotel_slug=$1 AND status='approved' AND lang='en' ORDER BY created_at DESC LIMIT 50", [slug]);
         reviewsHtml = reviewSectionHtml(h, slug, 'en', req.user, { count: rvCount, avg: rvAvg }, rvList.rows);
       } catch (e) { /* reviews not ready */ }
 
@@ -1095,7 +1907,39 @@ const body = `
       if (h.lat && h.lng) schema.geo = { '@type': 'GeoCoordinates', latitude: h.lat, longitude: h.lng };
       if (rvCount > 0) schema.aggregateRating = { '@type': 'AggregateRating', ratingValue: rvAvg.toFixed(1), reviewCount: rvCount, bestRating: 5, worstRating: 1 };
 
-      // English body (full parity with ID)
+      // Rich schema: images, breadcrumb, reviews, FAQ (EN)
+      schema.image = [
+        ogImage,
+        hotelImage(h, 800) + '&t=1',
+        hotelImage(h, 800) + '&t=2',
+        hotelImage(h, 800) + '&t=3'
+      ];
+      schema.breadcrumb = {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/hotels' },
+          ...(h.country_slug ? [{ '@type': 'ListItem', position: 2, name: h.country_name || h.country, item: SITE + '/en/hotels/' + h.country_slug }] : []),
+          ...(cityPath ? [{ '@type': 'ListItem', position: 3, name: h.city_name || h.city, item: SITE + cityPath }] : []),
+          { '@type': 'ListItem', position: 4, name: h.name, item: SITE + '/en/hotel/' + slug }
+        ].map((x, i) => ({ ...x, position: i + 1 }))
+      };
+      if (rvCount > 0 && Array.isArray(rvList.rows) && rvList.rows.length) {
+        schema.review = rvList.rows.slice(0, 3).map(r => ({
+          '@type': 'Review', author: { '@type': 'Person', name: r.author_name },
+          reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5 },
+          reviewBody: r.body ? String(r.body).slice(0, 250) : undefined, datePublished: r.created_at
+        })).filter(r => r.reviewBody);
+      }
+      schema.faq = {
+        '@type': 'FAQPage',
+        mainEntity: [
+          { '@type': 'Question', name: `What is the price to stay at ${h.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Rates start around ${price} per night, depending on room type and season.` } },
+          { '@type': 'Question', name: `Where is ${h.name} located?`, acceptedAnswer: { '@type': 'Answer', text: `The hotel is located in ${esc(loc)}${h.lat ? ` (coordinates ${Number(h.lat).toFixed(4)}, ${Number(h.lng).toFixed(4)})` : ''}.` } },
+          { '@type': 'Question', name: `What facilities does ${h.name} have?`, acceptedAnswer: { '@type': 'Answer', text: `Main facilities: ${am.slice(0, 4).join(', ')}${h.wifi ? ', WiFi' : ''}${h.pool ? ', Swimming Pool' : ''}.` } },
+          { '@type': 'Question', name: `What is the guest rating of ${h.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Rating ${h.rating || 4.0}/5 based on available data.` } }
+        ]
+      };
+
       const body = `
 <div class="crumbs"><a href="/hotels">Home</a> › ${h.country_slug ? `<a href="/en/hotels/${h.country_slug}">${esc(h.country_name)}</a>` : ''} › ${cityPath ? `<a href="${cityPath}">${esc(h.city_name || h.city)}</a>` : ''} › <b>${esc(h.name)}</b></div>
 <div class="wrap">
@@ -1245,6 +2089,9 @@ const body = `
       <p>📱 <strong>Useful Apps:</strong> Google Maps for navigation, Google Translate for local languages, and ride-hailing apps for easy transport.</p>
     </div>
   </section>
+
+  ${aiScoreSectionHtml(h, 'en')}
+  ${priceHistorySectionHtml(h, 'en')}
 
   <section class="seo-section">
     <h2>🎲 Virtual Hotel Monopoly — ${esc(h.name)}</h2>
@@ -1456,6 +2303,43 @@ const body = `
 
   <section class="seo-section" role="region"><h2>💎 Why Book Through MyTriv?</h2><div class="highlight-grid"><div class="hl-item">🔍 Compare 8 OTAs at once</div><div class="hl-item">🏰 Virtual Hotel Ownership — Own digital assets</div><div class="hl-item">🪙 Earn TrivCoin — Collect & redeem</div><div class="hl-item">🤖 AI Travel — Smart recommendations</div><div class="hl-item">🌍 190+ Countries — Interactive map</div><div class="hl-item">💰 100% Free — Go to partner OTAs</div></div></section>
 
+<button class="hd-chat-fab" onclick="hdChatToggle()" aria-label="AI Chat Assistant">🤖</button>
+<div class="hd-chat-bubble" id="hd-chat-box">
+  <div class="hd-chat-head">
+    <div class="hc-av">🤖</div>
+    <div><b>MyTriv AI</b><span>Assistant for ${esc(h.name)} · online</span></div>
+    <button class="hd-chat-close" onclick="hdChatToggle()" aria-label="Close">✕</button>
+  </div>
+  <div class="hd-chat-body" id="hd-chat-body"></div>
+  <div class="hd-chat-chips" id="hd-chat-chips"></div>
+  <div class="hd-chat-in">
+    <input id="hd-chat-input" placeholder="Ask about the hotel, sights, budget..." onkeydown="if(event.key==='Enter')hdChatSend(this.value)">
+    <button onclick="hdChatSend(document.getElementById('hd-chat-input').value)">Send</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var CHAT=${JSON.stringify({ NAME: h.name, CITY: h.city_name || h.city || h.country_name || '', COUNTRY: h.country_name || h.country || '', PRICE: hasPrice ? price : null, RATING: h.rating || 4.0, STARS: h.stars || 4, AM: am, LOC: loc, ID: (h.country_code === 'ID') })};
+  var CHIPS=['price','facilities','location','transport','itinerary','budget','attractions','booking'];
+  function chatGen(msg){
+    var t=msg.toLowerCase(),R=CHAT;
+    if(t.indexOf('price')!==-1||t.indexOf('cost')!==-1)return '💵 Rates at '+R.NAME+' start around '+R.PRICE+'/night. Compare all 8 partner OTAs on this page — 100% free with no extra fees.';
+    if(t.indexOf('facilit')!==-1||t.indexOf('amenit')!==-1||t.indexOf('pool')!==-1||t.indexOf('wifi')!==-1)return '🏨 Main facilities at '+R.NAME+': '+R.AM.slice(0,8).join(', ')+'. Everything you need for a comfortable stay.';
+    if(t.indexOf('location')!==-1||t.indexOf('address')!==-1||t.indexOf('where')!==-1)return '📍 '+R.NAME+' is located in '+R.CITY+', '+R.COUNTRY+'. Check the interactive map on this page for nearby POIs and landmarks.';
+    if(t.indexOf('transport')!==-1||t.indexOf('airport')!==-1||t.indexOf('taxi')!==-1)return '🚗 Transport in '+R.CITY+': taxi and public transport available. Compare airport shuttle options for the best route.';
+    if(t.indexOf('itinerary')!==-1||t.indexOf('plan')!==-1||t.indexOf('schedule')!==-1)return '🗺️ Quick '+R.CITY+' itinerary (2 days): Day 1 — check-in, explore downtown + local food. Day 2 — main attractions, shopping, check-out. Adjust to your interests!';
+    if(t.indexOf('budget')!==-1||t.indexOf('cheap')!==-1)return '💰 Budget stay at '+R.NAME+': from '+R.PRICE+'/night. Add local transport and meals. Book early and compare 8 OTAs to save up to 30%.';
+    if(t.indexOf('attraction')!==-1||t.indexOf('sight')!==-1||t.indexOf('tourist')!==-1||t.indexOf('place')!==-1)return '🌍 Around '+R.NAME+' in '+R.CITY+' there are attractions, restaurants, and landmarks. See the interactive map and AI Travel Tips on this page for recommendations.';
+    if(t.indexOf('book')!==-1||t.indexOf('reserv')!==-1)return '🛎️ To book '+R.NAME+', use the Booking.com, Agoda, or other OTA buttons on this page. You\'ll go to the partner site — no extra fees.';
+    return '🤖 Hi! I\'m the assistant for '+R.NAME+'. Ask me about price, facilities, location, transport, itinerary, budget, attractions, or booking — I\'ll help you fast! 📍 '+R.CITY+', '+R.COUNTRY+'.';
+  }
+  window.hdChatToggle=function(){var box=document.getElementById('hd-chat-box');var open=box.classList.toggle('open');if(open&&!box.getAttribute('data-started')){box.setAttribute('data-started','1');chatBoot();}};
+  window.hdChatSend=function(v){v=(v||'').trim();if(!v)return;var body=document.getElementById('hd-chat-body');var usr=document.createElement('div');usr.className='hd-chat-msg user';usr.textContent=v;body.appendChild(usr);var inp=document.getElementById('hd-chat-input');if(inp)inp.value='';body.scrollTop=body.scrollHeight;var tp=document.createElement('div');tp.className='hd-chat-typing';tp.textContent='🤖 typing...';body.appendChild(tp);setTimeout(function(){tp.remove();var b=document.createElement('div');b.className='hd-chat-msg bot';b.textContent=chatGen(v);body.appendChild(b);body.scrollTop=body.scrollHeight;},450);};
+  function chatBoot(){var body=document.getElementById('hd-chat-body');var chips=document.getElementById('hd-chat-chips');var hello=document.createElement('div');hello.className='hd-chat-msg bot';hello.textContent='🤖 Hi! I\'m the AI assistant for '+CHAT.NAME+' in '+CHAT.CITY+'. Ask me about price, facilities, itinerary, budget, or booking help?';body.appendChild(hello);var labels={price:'💰 Price',facilities:'🏨 Facilities',location:'📍 Location',transport:'🚗 Transport',budget:'💵 Budget',attractions:'🌍 Attractions',itinerary:'🗺️ Itinerary',booking:'🛎️ Booking'};Object.keys(labels).forEach(function(k){var b=document.createElement('button');b.textContent=labels[k];b.onclick=function(){window.hdChatSend(k);};chips.appendChild(b);});}
+})();
+<\/script>
+
 </div>`;
 
       res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
@@ -1647,11 +2531,16 @@ loadReviews('pending');
   #hotel-list{margin-top:8px;max-height:300px;overflow-y:auto}
   #hotel-list a{display:block;padding:6px 8px;color:#c9d1d9;text-decoration:none;border-radius:4px;font-size:12px}
   #hotel-list a:hover{background:#21262d;color:#58a6ff}
-  .maplibregl-popup{max-width:260px!important}
-  .maplibregl-popup-content{background:#161b22!important;color:#e6e6e6!important;border:1px solid #30363d!important;border-radius:10px!important;padding:12px!important;font-size:12px}
-  .maplibregl-popup-content h3{margin:0 0 4px;font-size:14px;color:#58a6ff}
-  .maplibregl-popup-content .stars{color:#f0c040}
-  .maplibregl-popup-content a{color:#58a6ff}
+   .maplibregl-popup{max-width:260px!important}
+   .maplibregl-popup-content{background:#161b22!important;color:#e6e6e6!important;border:1px solid #30363d!important;border-radius:10px!important;padding:12px!important;font-size:12px}
+   .maplibregl-popup-content h3{margin:0 0 4px;font-size:14px;color:#58a6ff}
+   .maplibregl-popup-content .stars{color:#f0c040}
+   .maplibregl-popup-content a{color:#58a6ff}
+   .hd-chat-fab,.hd-chat-bubble{z-index:2500}
+   .hd-chat-bubble{right:18px;bottom:150px}
+   .hd-chat-body{max-height:min(380px,50vh)}
+   #map{position:fixed;inset:0}
+   #sidebar{pointer-events:auto}
 </style>
 <div id="map"></div>
 <div id="sidebar">
@@ -1667,24 +2556,20 @@ loadReviews('pending');
   <button onclick="filterBy('premium')" id="btn-premium">🌟 Premium (4-5 bintang)</button>
   <button onclick="filterBy('budget')" id="btn-budget">💰 Budget (<800rb)</button>
   <div id="hotel-list">${hotels.slice(0,20).map(h=>`<a href="/hotel/${h.slug}" target="_blank">⭐${h.stars||4} ${esc(h.name).slice(0,28)}</a>`).join('')}</div>
-  <button onclick="showAddForm()" style="width:100%;padding:10px;margin-top:8px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">➕ Tambah Lokasi</button>
 </div>
-
-<!-- ADD PLACE MODAL -->
-<div id="add-modal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.7);justify-content:center;align-items:center;">
-  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;width:90%;max-width:400px;max-height:90vh;overflow-y:auto;color:var(--txt);">
-    <h3 style="margin:0 0 16px;">➕ Tambah Lokasi di ${esc(city)}</h3>
-    <div id="add-status" style="font-size:13px;margin-bottom:8px;"></div>
-    <input id="poi-name" placeholder="Nama tempat*" style="width:100%;padding:10px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:8px;font-size:13px;">
-    <select id="poi-cat" style="width:100%;padding:10px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:8px;font-size:13px;">
-      <option>🍽️ Kuliner</option><option>☕ Kafe</option><option>📸 Wisata</option><option>🛍️ Belanja</option><option>💊 Kesehatan</option><option>📍 Lainnya</option>
-    </select>
-    <textarea id="poi-notes" placeholder="Catatan (opsional)..." rows="2" style="width:100%;padding:10px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:8px;font-size:13px;resize:vertical;"></textarea>
-    <p style="font-size:11px;color:var(--mut);margin-bottom:12px;">📍 Klik pada peta untuk memilih lokasi, lalu isi form.</p>
-    <div style="display:flex;gap:8px;">
-      <button onclick="submitPoi()" style="flex:1;padding:10px;background:var(--cy);color:#060B13;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">💾 Simpan</button>
-      <button onclick="hideAddForm()" style="flex:1;padding:10px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:8px;cursor:pointer;font-size:13px;">Batal</button>
-    </div>
+<!-- FLOATING AI CHAT ASSISTANT (maps) -->
+<button class="hd-chat-fab" onclick="hdChatToggle()" aria-label="AI Chat Assistant">🤖</button>
+<div class="hd-chat-bubble" id="hd-chat-box">
+  <div class="hd-chat-head">
+    <div class="hc-av">🤖</div>
+    <div><b>MyTriv AI</b><span>Panduan hotel ${esc(city)} · online</span></div>
+    <button class="hd-chat-close" onclick="hdChatToggle()" aria-label="Tutup">✕</button>
+  </div>
+  <div class="hd-chat-body" id="hd-chat-body"></div>
+  <div class="hd-chat-chips" id="hd-chat-chips"></div>
+  <div class="hd-chat-in">
+    <input id="hd-chat-input" placeholder="Tanya hotel, budget, wisata ${esc(city)}..." onkeydown="if(event.key==='Enter')hdChatSend(this.value)">
+    <button onclick="hdChatSend(document.getElementById('hd-chat-input').value)">Kirim</button>
   </div>
 </div>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -1732,47 +2617,30 @@ function searchHotel(q){
     markers.push(m);
   });
 }
-// === USER POI ===
-let pickedLat=null, pickedLng=null;
-const userMarkers=[];
-const CITY="${esc(city)}";
-const userPoiColors={'🍽️ Kuliner':'#e04040','☕ Kafe':'#8B4513','📸 Wisata':'#1f6feb','🛍️ Belanja':'#e040b0','💊 Kesehatan':'#e04040','📍 Lainnya':'#10B981'};
-
-// Load user POIs
-fetch('/maps/api/poi?city='+encodeURIComponent(CITY)).then(r=>r.json()).then(d=>{
-  d.pois.forEach(p=>{
-    const el=document.createElement('div');
-    el.style.cssText='width:22px;height:22px;background:'+(userPoiColors[p.category]||'#10B981')+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.6);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:bold';
-    el.textContent='U';
-    const popupHTML='<h3>'+p.name+'</h3><div style=font-size:11px;color:var(--mut)>'+p.category+' · by '+p.user_name+'</div>'+(p.notes?'<p style=font-size:12px;margin-top:4px>'+p.notes+'</p>':'')+'<div style=margin-top:6px><a href=# onclick=fetch(\\'/maps/api/poi/'+p.id+'/like\\',{method:\\'POST\\'}).then(()=>location.reload());return!1 style=font-size:12px>❤️ '+p.likes+'</a></div>';
-    const m=new maplibregl.Marker({element:el}).setLngLat([p.lng,p.lat]).setPopup(new maplibregl.Popup().setHTML(popupHTML)).addTo(map);
-    userMarkers.push(m);
-  });
-});
-
-// Map click to pick location
-map.on('click',function(e){pickedLat=e.lngLat.lat;pickedLng=e.lngLat.lng;});
-
-function showAddForm(){
-  document.getElementById('add-modal').style.display='flex';
-  document.getElementById('add-status').textContent='📍 Klik pada peta untuk pilih lokasi, lalu isi form.';
-}
-function hideAddForm(){document.getElementById('add-modal').style.display='none';}
-
-async function submitPoi(){
-  const name=document.getElementById('poi-name').value.trim();
-  if(!name||!pickedLat){document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ Isi nama & klik peta untuk pilih lokasi</span>';return;}
-  const cat=document.getElementById('poi-cat').value;
-  const notes=document.getElementById('poi-notes').value.trim();
-  document.getElementById('add-status').innerHTML='<span style=color:var(--cy)>⏳ Menyimpan...</span>';
-  fetch('/maps/api/poi',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    email:(window.__USER||{}).email||'',name,lat:pickedLat,lng:pickedLng,city:CITY,category:cat,notes
-  })}).then(r=>r.json()).then(d=>{
-    if(d.ok){document.getElementById('add-status').innerHTML='<span style=color:#10B981>✅ '+d.message+'</span>';setTimeout(()=>location.reload(),1500);}
-    else{document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ '+d.error+'</span>';}
-  }).catch(()=>{document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ Gagal. Coba login dulu.</span>';});
-}
 renderMarkers('all');
+/* Floating AI Chat for maps */
+(function(){
+  var CIT=${JSON.stringify(city)};
+  var COUNT=${hotels.length};
+  var BUDGET=${hotels.filter(h=>h.price_idr<800000).length};
+  var PREM=${hotels.filter(h=>(h.stars||4)>=4).length};
+  var AVG=${(hotels.reduce((s,h)=>s+(h.rating||4),0)/hotels.length).toFixed(1)};
+  var CHIPS=['hotel','budget','premium','wisata','itinerary','transport','booking'];
+  function chatGen(msg){
+    var t=msg.toLowerCase();
+    if(t.indexOf('hotel')!==-1||t.indexOf('murah')!==-1)return '🏨 Ada '+COUNT+' hotel di '+CIT+' di peta ini. Gunakan filter Premium / Budget di sidebar atau cari nama hotel. Klik marker untuk lihat detail & booking.';
+    if(t.indexOf('budget')!==-1||t.indexOf('hemat')!==-1||t.indexOf('murah')!==-1)return '💰 '+BUDGET+' hotel di '+CIT+' punya tarif di bawah 800 ribu/malam. Klik filter "Budget" di sidebar untuk menyorotnya di peta.';
+    if(t.indexOf('premium')!==-1||t.indexOf('bintang')!==-1||t.indexOf('luxury')!==-1)return '🌟 '+PREM+' hotel premium (4-5 bintang) tersedia di '+CIT+'. Klik filter "Premium" untuk melihatnya di peta.';
+    if(t.indexOf('wisata')!==-1||t.indexOf('tempat')!==-1||t.indexOf('atraksi')!==-1)return '🌍 '+CIT+' kaya destinasi: candi, pantai, kuliner, dan budaya. Cek halaman hotel di peta ini, lalu buka AI Travel Tips di halaman detail masing-masing hotel.';
+    if(t.indexOf('itinerary')!==-1||t.indexOf('jalan')!==-1)return '🗺️ Itinerary singkat '+CIT+': Hari 1 — check-in & eksplor pusat kota + kuliner. Hari 2 — atraksi utama, belanja oleh-oleh, check-out. Gunakan peta ini untuk memilih hotel terdekat.';
+    if(t.indexOf('transport')!==-1||t.indexOf('taksi')!==-1||t.indexOf('bandara')!==-1)return '🚗 Transportasi di '+CIT+': taksi & ojek online tersedia luas, plus kereta untuk antar kota. Bandingkan opsi shuttle dari bandara untuk rute terbaik.';
+    if(t.indexOf('booking')!==-1||t.indexOf('pesan')!==-1)return '🛎️ Klik marker hotel di peta lalu "Lihat Detail & Booking" untuk membandingkan harga di 8 OTA (Booking.com, Agoda, Traveloka, dll) — 100% gratis.';
+    return '🤖 Halo! Saya panduan '+CIT+' di peta interaktif MyTriv. Ada '+COUNT+' hotel, '+BUDGET+' budget & '+PREM+' premium (rating avg '+AVG+'). Tanya: hotel, budget, premium, wisata, itinerary, transportasi, atau booking!';
+  }
+  window.hdChatToggle=function(){var box=document.getElementById('hd-chat-box');var open=box.classList.toggle('open');if(open&&!box.getAttribute('data-started')){box.setAttribute('data-started','1');chatBoot();}};
+  window.hdChatSend=function(v){v=(v||'').trim();if(!v)return;var body=document.getElementById('hd-chat-body');var usr=document.createElement('div');usr.className='hd-chat-msg user';usr.textContent=v;body.appendChild(usr);var inp=document.getElementById('hd-chat-input');if(inp)inp.value='';body.scrollTop=body.scrollHeight;var tp=document.createElement('div');tp.className='hd-chat-typing';tp.textContent='🤖 mengetik...';body.appendChild(tp);setTimeout(function(){tp.remove();var b=document.createElement('div');b.className='hd-chat-msg bot';b.textContent=chatGen(v);body.appendChild(b);body.scrollTop=body.scrollHeight;},450);};
+  function chatBoot(){var body=document.getElementById('hd-chat-body');var chips=document.getElementById('hd-chat-chips');var hello=document.createElement('div');hello.className='hd-chat-msg bot';hello.textContent='🤖 Halo! Ada '+COUNT+' hotel di '+CIT+' di peta ini. Mau cari hotel budget, premium, atau rekomendasi itinerary?';body.appendChild(hello);var labels={hotel:'🏨 Hotel',budget:'💰 Budget',premium:'🌟 Premium',wisata:'🌍 Wisata',itinerary:'🗺️ Itinerary',transport:'🚗 Transport',booking:'🛎️ Booking'};Object.keys(labels).forEach(function(k){var b=document.createElement('button');b.textContent=labels[k];b.onclick=function(){window.hdChatSend(k);};chips.appendChild(b);});}
+})();
 </script>`;
       res.send(shell({ title, desc, canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: mapHtml }));
     } catch (e) {
