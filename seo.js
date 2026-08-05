@@ -2544,6 +2544,7 @@ loadReviews('pending');
 </style>
 <div id="map"></div>
 <div id="sidebar">
+  <a href="javascript:history.back()" style="display:inline-flex;align-items:center;gap:6px;color:var(--cy);font-size:13px;font-weight:700;margin-bottom:10px;text-decoration:none;">← Kembali</a>
   <h1>🏨 Hotel di ${esc(city)}</h1>
   <div class="sub">${hotels.length} hotel — MyTriv Maps Explorer</div>
   <div class="stats">
