@@ -839,7 +839,7 @@ ${parts.map(u => `<url><loc>${u}</loc></url>`).join('\n')}
       res.set('Content-Type', 'application/xml');
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${rows.map(r => `<url><loc>${SITE}/hotels/${r.slug}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
+${rows.map(r => `<url><loc>${SITE}/hotels/${encodeURIComponent(r.slug)}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
 </urlset>`);
     } catch (e) { console.error('sitemap countries error:', e.message); res.status(500).send('sitemap error'); }
   });
@@ -850,7 +850,7 @@ ${rows.map(r => `<url><loc>${SITE}/hotels/${r.slug}</loc><changefreq>weekly</cha
       res.set('Content-Type', 'application/xml');
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${rows.map(r => `<url><loc>${SITE}/hotels/${r.country}/${r.slug}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
+${rows.map(r => `<url><loc>${SITE}/hotels/${encodeURIComponent(r.country)}/${encodeURIComponent(r.slug)}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
 </urlset>`);
     } catch (e) { console.error('sitemap cities error:', e.message); res.status(500).send('sitemap error'); }
   });
@@ -861,13 +861,13 @@ ${rows.map(r => `<url><loc>${SITE}/hotels/${r.country}/${r.slug}</loc><changefre
       const page = parseInt(part, 10);
       if (!page || page < 1 || page > 200) return res.status(404).send('not found');
       const offset = (page - 1) * 50000;
-      const { rows } = await pool.query('SELECT slug FROM hotels WHERE slug IS NOT NULL ORDER BY slug LIMIT 50000 OFFSET $1', [offset]);
+      const { rows } = await pool.query('SELECT slug, updated_at FROM hotels WHERE slug IS NOT NULL ORDER BY slug LIMIT 50000 OFFSET $1', [offset]);
       if (!rows.length) return res.status(404).send('not found');
       const prefix = lang === 'en' ? '/en/hotel/' : '/hotel/';
       res.set('Content-Type', 'application/xml');
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${rows.map(r => `<url><loc>${SITE}${prefix}${r.slug}</loc><changefreq>daily</changefreq></url>`).join('\n')}
+${rows.map(r => `<url><loc>${SITE}${prefix}${encodeURIComponent(r.slug)}</loc>${r.updated_at ? `<lastmod>${new Date(r.updated_at).toISOString().slice(0, 10)}</lastmod>` : ''}<changefreq>daily</changefreq></url>`).join('\n')}
 </urlset>`);
     } catch (e) { console.error('sitemap hotels error:', e.message); res.status(500).send('sitemap error'); }
   });
