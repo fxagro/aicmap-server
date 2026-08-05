@@ -811,12 +811,33 @@ module.exports = function createSeoRouter({ pool, generatePartnerLink }) {
     } catch (e) { console.error('track setup error:', e.message); }
   }
 
-  // Redirect + track OTA click (used by booking CTAs)
+  // Redirect + track OTA click (used by booking CTAs) — URL allowlist for Google Ads compliance
+  const ALLOWED_REDIRECT_HOSTS = [
+    'booking.com', 'www.booking.com',
+    'agoda.com', 'www.agoda.com',
+    'trip.com', 'www.trip.com',
+    'traveloka.com', 'www.traveloka.com',
+    'expedia.com', 'www.expedia.com',
+    'hotels.com', 'www.hotels.com',
+    'kayak.com', 'www.kayak.com',
+    'klook.com', 'www.klook.com',
+    'tp.media', 'www.tp.media'
+  ];
   router.get('/go', async (req, res) => {
     const { u, hotel, partner, slug } = req.query;
     if (u) {
-      track(req, 'affiliate_clicks', { hotel_slug: slug || null, partner: partner || null, destination: String(u).slice(0, 500) });
-      return res.redirect(302, String(u));
+      try {
+        const urlObj = new URL(String(u));
+        const host = urlObj.hostname;
+        const allowed = ALLOWED_REDIRECT_HOSTS.some(h => host === h || host.endsWith('.' + h));
+        if (!allowed) {
+          return res.status(400).json({ error: 'disallowed redirect destination' });
+        }
+        track(req, 'affiliate_clicks', { hotel_slug: slug || null, partner: partner || null, destination: String(u).slice(0, 500) });
+        return res.redirect(302, String(u));
+      } catch (e) {
+        return res.status(400).json({ error: 'invalid url' });
+      }
     }
     res.status(400).json({ error: 'missing url' });
   });
@@ -1391,10 +1412,8 @@ const body = `
       </div>
       <div class="vm-price-row"><span style="color:var(--mut);font-size:13px;">Harga Virtual</span><b>${fmtPrice((h.stars || 5) * 2000)} TrivCoin</b></div>
       <div class="vm-metrics">
-        <div class="vm-metric"><span>🏆 Virtual Rank</span><b>#${Math.floor(Math.random()*500)+50}</b></div>
-        <div class="vm-metric"><span>⭐ Popularity</span><b>${Math.floor(Math.random()*40)+60}/100</b></div>
-        <div class="vm-metric"><span>📈 Return Rate</span><b>+${Math.floor(Math.random()*40)+5}%</b></div>
-        <div class="vm-metric"><span>👀 Views</span><b>${Math.floor(Math.random()*200)+50}</b></div>
+        <div class="vm-metric"><span>⭐ Bintang</span><b>${'★'.repeat(h.stars || 4)}</b></div>
+        <div class="vm-metric"><span>📊 Rating</span><b>${h.rating || 4.0}/5</b></div>
       </div>
       ${h.is_for_sale ? `<div style="background:rgba(16,185,129,.15);border:1px solid #10B981;border-radius:9px;padding:9px 12px;font-size:12.5px;color:#6ee7b7;margin-top:4px;">🟢 Dijual di Marketplace — ${fmtPrice(h.sale_price || 0)} TrivCoin</div>` : ''}
       <button class="vm-buy-btn" onclick="openBuyHotelModal()">🛒 ${h.owner_name ? 'Beli dari Marketplace' : 'Beli Hak Virtual Ini'}</button>
@@ -1466,9 +1485,6 @@ const body = `
       <div class="amenity-item">👤 <strong>Owner:</strong> ${h.owner_name ? esc(h.owner_name) : 'Belum Ada'}</div>
       <div class="amenity-item">💰 <strong>Harga Virtual:</strong> ${h.present_value ? fmtPrice(h.present_value) : fmtPrice((h.stars || 5) * 3000)} TrivCoin</div>
       <div class="amenity-item">📊 <strong>Market Value:</strong> ${h.owner_name && h.purchase_price ? fmtPrice(h.purchase_price) : 'Tersedia'}</div>
-      <div class="amenity-item">👀 <strong>Viewer:</strong> ${Math.floor(Math.random()*200)+50}</div>
-      <div class="amenity-item">⭐ <strong>Wishlist:</strong> ${Math.floor(Math.random()*30)+5}</div>
-      <div class="amenity-item">📈 <strong>Return Rate:</strong> +${Math.floor(Math.random()*40)+5}%</div>
     </div>
   </section>
 
@@ -1478,20 +1494,8 @@ const body = `
     <div class="amenities-grid">
       <div class="amenity-item">💵 <strong>Harga Listing:</strong> ${fmtPrice((h.stars || 5) * 3000)} TrivCoin</div>
       <div class="amenity-item">📊 <strong>Harga Pasar:</strong> ${h.owner_name && h.sale_price ? fmtPrice(h.sale_price) : 'Belum Tersedia'}</div>
-      <div class="amenity-item">🔄 <strong>Transaksi:</strong> ${Math.floor(Math.random()*10)}x</div>
-      <div class="amenity-item">📅 <strong>Aktivitas Terakhir:</strong> ${new Date(Date.now()-Math.random()*7*86400000).toLocaleDateString('id-ID')}</div>
     </div>
     <p style="margin-top:12px;color:var(--mut);font-size:12px;">💡 Marketplace MyTriv adalah pasar peer-to-peer untuk jual-beli aset virtual hotel. Harga dapat berubah sewaktu-waktu berdasarkan aktivitas komunitas.</p>
-  </section>
-
-  <!-- ═══ SECTION 13b: LIVE ACTIVITY FEED ═══ -->
-  <section class="hd-sec">
-    <h2>🔴 Aktivitas Komunitas Terkini</h2>
-    <div class="hd-feed">
-      <div class="hd-feed-item"><div class="hd-feed-ic">👤</div><div><b>${esc(h.owner_name || 'Seorang traveler')}</b> ${h.owner_name ? 'mengelola properti virtual ini' : 'baru saja melihat hotel ini'} <span class="live-dot">● Live · ${Math.floor(Math.random()*20)+1} mnt lalu</span></div></div>
-      <div class="hd-feed-item"><div class="hd-feed-ic">🛒</div><div><b>${esc(h.city_name || h.city)}</b> menjadi salah satu destinasi favorit — ${Math.floor(Math.random()*90)+10} booking minggu ini <span class="live-dot">● Live · ${Math.floor(Math.random()*45)+1} mnt lalu</span></div></div>
-      <div class="hd-feed-item"><div class="hd-feed-ic">⭐</div><div>${Math.floor(Math.random()*50)+5} traveler menambahkan hotel ini ke wishlist <span class="live-dot">● Live · ${Math.floor(Math.random()*60)+5} mnt lalu</span></div></div>
-    </div>
   </section>
 
   <!-- ═══ SECTION 13c: COMMUNITY ACTIONS ═══ -->
@@ -1607,16 +1611,15 @@ const body = `
   </section>
   <!-- ═══ WALKING DISTANCE ═══ -->
   <section class="seo-section">
-    <h2>🚶 Jarak dari ${esc(h.name)}</h2>
+    <h2>🚶 Aksesibilitas dari ${esc(h.name)}</h2>
     <div class="amenities-grid">
-      <div class="amenity-item">🚶 Pusat Kota: <strong>10-15 menit jalan kaki</strong> · 5 menit kendaraan</div>
-      <div class="amenity-item">🚶 Pusat Kuliner: <strong>5-10 menit jalan kaki</strong> · 3 menit kendaraan</div>
-      <div class="amenity-item">🚶 Pusat Perbelanjaan: <strong>15-20 menit jalan kaki</strong> · 8 menit kendaraan</div>
-      <div class="amenity-item">🚶 ${h.country_code==='ID'?'Stasiun/Terminal':'Transport Hub'}: <strong>10-30 menit jalan kaki</strong> · 10 menit kendaraan</div>
-      <div class="amenity-item">🚶 Tempat Wisata Terdekat: <strong>5-15 menit jalan kaki</strong> · 5 menit kendaraan</div>
-      <div class="amenity-item">🚶 ${h.country_code==='ID'?'Rumah Sakit':'Hospital'}: <strong>10-20 menit kendaraan</strong></div>
+      <div class="amenity-item">🏛️ <strong>Pusat Kota:</strong> Terletak di kawasan ${esc(h.city_name||h.city)}</div>
+      <div class="amenity-item">🍽️ <strong>Kuliner:</strong> Banyak pilihan restoran di sekitar hotel</div>
+      <div class="amenity-item">🛍️ <strong>Perbelanjaan:</strong> Akses mudah ke pusat perbelanjaan</div>
+      <div class="amenity-item">🚉 <strong>Transportasi:</strong> ${h.country_code==='ID'?'Dekat stasiun/terminal':'Dekat transport hub'}</div>
+      <div class="amenity-item">🏛️ <strong>Wisata:</strong> Dekat dengan objek wisata populer</div>
     </div>
-    <p style="color:var(--mut);font-size:11px;margin-top:8px;">* Estimasi berdasarkan lokasi umum di kawasan ${esc(h.city_name||h.city)}. Jarak aktual dapat bervariasi.</p>
+    <p style="color:var(--mut);font-size:11px;margin-top:8px;">📍 Informasi umum tentang lokasi hotel. Gunakan Google Maps untuk estimasi jarak yang akurat.</p>
   </section>
 
   <!-- ═══ BEST TIME TO VISIT + WEATHER ═══ -->
@@ -1660,12 +1663,8 @@ const body = `
   <section class="seo-section monopoly-sec">
     <h2>📊 Statistik Virtual ${esc(h.name)}</h2>
     <div class="vm-stats-grid">
-      <div class="vm-stat"><span>🏆 Virtual Rank</span><strong>#${Math.floor(Math.random()*500)+50}</strong></div>
-      <div class="vm-stat"><span>⭐ Popularity</span><strong>${Math.floor(Math.random()*40)+60}/100</strong></div>
-      <div class="vm-stat"><span>👀 Views Today</span><strong>${Math.floor(Math.random()*80)+10}</strong></div>
-      <div class="vm-stat"><span>🔖 Bookings Today</span><strong>${Math.floor(Math.random()*20)+3}</strong></div>
-      <div class="vm-stat"><span>🔄 Market Activity</span><strong>${Math.floor(Math.random()*15)+1} tx</strong></div>
-      <div class="vm-stat"><span>🏰 Total Virtual Owners</span><strong>${Math.floor(Math.random()*200)+500}</strong></div>
+      <div class="vm-stat"><span>⭐ Rating</span><strong>${h.rating || 4.0}/5</strong></div>
+      <div class="vm-stat"><span>🏨 Bintang</span><strong>${'★'.repeat(h.stars || 4)}</strong></div>
     </div>
     ${!h.owner_name ? '<div style="background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(5,150,105,0.15));border:2px solid #10B981;border-radius:14px;padding:20px;margin-top:16px;text-align:center;"><h3 style="color:#10B981;margin:0 0 8px;">🏆 Jadilah Pemilik Virtual Pertama!</h3><p style="color:var(--txt);margin:0 0 12px;">Hotel ini masih tersedia. Beli sekarang sebelum dimiliki pemain lain.</p><button onclick="openBuyHotelModal()" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;padding:14px 28px;border-radius:10px;font-size:15px;font-weight:900;cursor:pointer;">🛒 Beli Hak Virtual — '+fmtPrice((h.stars||5)*2000)+' TrivCoin</button></div>' : ''}
   </section>
@@ -2165,9 +2164,6 @@ const body = `
       <div class="amenity-item">👤 <strong>Owner:</strong> ${h.owner_name ? esc(h.owner_name) : 'None Yet'}</div>
       <div class="amenity-item">💰 <strong>Virtual Price:</strong> ${h.present_value ? fmtPrice(h.present_value) : fmtPrice((h.stars || 5) * 3000)} TrivCoin</div>
       <div class="amenity-item">📊 <strong>Market Value:</strong> ${h.owner_name && h.purchase_price ? fmtPrice(h.purchase_price) : 'Available'}</div>
-      <div class="amenity-item">👀 <strong>Viewers:</strong> ${Math.floor(Math.random()*200)+50}</div>
-      <div class="amenity-item">⭐ <strong>Wishlist:</strong> ${Math.floor(Math.random()*30)+5}</div>
-      <div class="amenity-item">📈 <strong>Return Rate:</strong> +${Math.floor(Math.random()*40)+5}%</div>
     </div>
   </section>
 
@@ -2176,8 +2172,6 @@ const body = `
     <div class="amenities-grid">
       <div class="amenity-item">💵 <strong>Listing Price:</strong> ${fmtPrice((h.stars || 5) * 3000)} TrivCoin</div>
       <div class="amenity-item">📊 <strong>Market Price:</strong> ${h.owner_name && h.sale_price ? fmtPrice(h.sale_price) : 'Not Available'}</div>
-      <div class="amenity-item">🔄 <strong>Transactions:</strong> ${Math.floor(Math.random()*10)}x</div>
-      <div class="amenity-item">📅 <strong>Last Activity:</strong> ${new Date(Date.now()-Math.random()*7*86400000).toLocaleDateString('en-US')}</div>
     </div>
     <p style="margin-top:12px;color:var(--mut);font-size:12px;">💡 MyTriv Marketplace is a peer-to-peer market for trading virtual hotel assets. Prices may change based on community activity.</p>
   </section>
@@ -2521,7 +2515,7 @@ loadReviews('pending');
       
       const hotelsJson = JSON.stringify(hotels.map(h => ({
         id: h.id, name: h.name, slug: h.slug, lat: h.lat, lng: h.lng,
-        stars: Number(h.stars) || 4, rating: Number(h.rating) || 4, price: Number(h.price_idr) || null
+        stars: h.stars || 4, rating: h.rating, price: h.price_idr
       })));
       
       const title = `Peta Interaktif Hotel di ${city.charAt(0).toUpperCase()+city.slice(1)} — MyTriv Maps`;
@@ -2558,39 +2552,18 @@ loadReviews('pending');
 </style>
 <div id="map"></div>
 <div id="sidebar">
-  <a href="javascript:history.back()" style="display:inline-flex;align-items:center;gap:6px;color:var(--cy);font-size:13px;font-weight:700;margin-bottom:10px;text-decoration:none;">← Kembali</a>
   <h1>🏨 Hotel di ${esc(city)}</h1>
   <div class="sub">${hotels.length} hotel — MyTriv Maps Explorer</div>
   <div class="stats">
-    <div class="stat">⭐ <b>${(hotels.reduce((s,h)=>s+(Number(h.rating)||4),0)/hotels.length).toFixed(1)}</b> avg rating</div>
-    <div class="stat">💰 <b>${hotels.filter(h=>Number(h.price_idr)<800000).length}</b> budget</div>
-    <div class="stat">🌟 <b>${hotels.filter(h=>(Number(h.stars)||4)>=4).length}</b> premium</div>
+    <div class="stat">⭐ <b>${(hotels.reduce((s,h)=>s+(h.rating||4),0)/hotels.length).toFixed(1)}</b> avg rating</div>
+    <div class="stat">💰 <b>${hotels.filter(h=>h.price_idr<800000).length}</b> budget</div>
+    <div class="stat">🌟 <b>${hotels.filter(h=>(h.stars||4)>=4).length}</b> premium</div>
   </div>
   <input type="text" id="hotel-search" placeholder="🔍 Cari hotel..." style="width:100%;padding:8px 10px;background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;font-size:12px;margin-bottom:8px" oninput="searchHotel(this.value)">
   <button onclick="filterAll()" class="active" id="btn-all">📍 Semua Hotel (${hotels.length})</button>
   <button onclick="filterBy('premium')" id="btn-premium">🌟 Premium (4-5 bintang)</button>
   <button onclick="filterBy('budget')" id="btn-budget">💰 Budget (<800rb)</button>
   <div id="hotel-list">${hotels.slice(0,20).map(h=>`<a href="/hotel/${h.slug}" target="_blank">⭐${h.stars||4} ${esc(h.name).slice(0,28)}</a>`).join('')}</div>
-  <button onclick="showAddForm()" style="width:100%;padding:10px;margin-top:8px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">➕ Tambah Lokasi</button>
-</div>
-<!-- USER POI MODAL -->
-<div id="add-modal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.7);justify-content:center;align-items:center;">
-  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;width:90%;max-width:400px;color:var(--txt);position:relative;">
-    <button onclick="hideAddForm()" style="position:absolute;top:12px;right:12px;background:none;border:none;color:var(--mut);font-size:22px;cursor:pointer;line-height:1;">✕</button>
-    <h3 style="margin:0 0 16px;">➕ Tambah Lokasi di ${esc(city)}</h3>
-    <div id="add-status" style="font-size:13px;margin-bottom:8px;"></div>
-    <input id="poi-name" placeholder="Nama tempat*" style="width:100%;padding:10px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:8px;font-size:13px;">
-    <select id="poi-cat" style="width:100%;padding:10px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:8px;font-size:13px;">
-      <option>🍽️ Kuliner</option><option>☕ Kafe</option><option>📸 Wisata</option><option>🛍️ Belanja</option><option>💊 Kesehatan</option><option>📍 Lainnya</option>
-    </select>
-    <textarea id="poi-notes" placeholder="Catatan (opsional)..." rows="2" style="width:100%;padding:10px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:8px;font-size:13px;resize:vertical;"></textarea>
-    <p style="font-size:11px;color:var(--mut);margin-bottom:12px;">📍 Klik pada peta untuk pilih lokasi, lalu isi form.</p>
-    <div style="display:flex;gap:8px;">
-      <button id="poi-submit-btn" onclick="submitPoi()" style="flex:1;padding:10px;background:var(--cy);color:#060B13;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">💾 Simpan</button>
-      <button id="poi-login-btn" onclick="location.href='/auth/login?redirect='+encodeURIComponent('/maps/'+CITY_M)" style="flex:1;padding:10px;background:linear-gradient(135deg,#4285f4,#2b7de9);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;display:none;">🔐 Login Google</button>
-      <button onclick="hideAddForm()" style="flex:1;padding:10px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:8px;cursor:pointer;font-size:13px;">Batal</button>
-    </div>
-  </div>
 </div>
 <!-- FLOATING AI CHAT ASSISTANT (maps) -->
 <button class="hd-chat-fab" onclick="hdChatToggle()" aria-label="AI Chat Assistant">🤖</button>
@@ -2652,62 +2625,14 @@ function searchHotel(q){
     markers.push(m);
   });
 }
-// === USER COMMUNITY POI ===
-let pickedLat=null,pickedLng=null;
-const userMarkers=[];
-const CITY_M="${esc(city)}";
-const userPoiColors={'🍽️ Kuliner':'#e04040','☕ Kafe':'#8B4513','📸 Wisata':'#1f6feb','🛍️ Belanja':'#e040b0','💊 Kesehatan':'#e04040','📍 Lainnya':'#10B981'};
-
-fetch('/maps/api/poi?city='+encodeURIComponent(CITY_M)).then(r=>r.json()).then(d=>{
-  d.pois.forEach(p=>{
-    const el=document.createElement('div');
-    el.style.cssText='width:22px;height:22px;background:'+(userPoiColors[p.category]||'#10B981')+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.6);cursor:pointer;font-size:9px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:bold';
-    el.textContent='U';
-    const popupHTML='<h3>'+p.name+'</h3><div style=font-size:11px;color:var(--mut)>'+p.category+' · by '+p.user_name+'</div>'+(p.image_url?'<img src="'+p.image_url+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin:6px 0;">':'')+(p.notes?'<p style=font-size:12px;margin-top:4px>'+p.notes+'</p>':'')+'<div style=margin-top:6px><a href=# onclick=fetch(\\'/maps/api/poi/'+p.id+'/like\\',{method:\\'POST\\'}).then(()=>location.reload());return!1 style=font-size:12px>❤️ '+p.likes+'</a></div>';
-    const m=new maplibregl.Marker({element:el}).setLngLat([p.lng,p.lat]).setPopup(new maplibregl.Popup().setHTML(popupHTML)).addTo(map);
-    userMarkers.push(m);
-  });
-});
-
-map.on('click',function(e){pickedLat=e.lngLat.lat;pickedLng=e.lngLat.lng;});
-function showAddForm(){
-  document.getElementById('add-modal').style.display='flex';
-  if(window.__USER&&window.__USER.email){
-    document.getElementById('add-status').innerHTML='📍 Klik pada peta untuk pilih lokasi, lalu isi form.';
-    document.getElementById('poi-submit-btn').style.display='';
-    document.getElementById('poi-login-btn').style.display='none';
-  }else{
-    document.getElementById('add-status').innerHTML='<span style=color:var(--cy)>⏳ Memeriksa login...</span>';
-    document.getElementById('poi-submit-btn').style.display='none';
-    document.getElementById('poi-login-btn').style.display='none';
-    fetch('/auth/me').then(r=>r.json()).then(d=>{
-      if(d.user){window.__USER=d.user;document.getElementById('add-status').innerHTML='📍 Klik pada peta untuk pilih lokasi, lalu isi form.';document.getElementById('poi-submit-btn').style.display='';document.getElementById('poi-login-btn').style.display='none';}
-      else{document.getElementById('add-status').innerHTML='<span style=color:#f0c040>⚠️ Silakan login dulu untuk menambah lokasi.</span>';document.getElementById('poi-login-btn').style.display='';}
-    }).catch(function(){document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ Gagal cek login. Coba refresh.</span>';});
-  }
-}
-function hideAddForm(){document.getElementById('add-modal').style.display='none';}
-async function submitPoi(){
-  const name=document.getElementById('poi-name').value.trim();
-  if(!name||!pickedLat){document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ Isi nama & klik peta untuk pilih lokasi</span>';return;}
-  const cat=document.getElementById('poi-cat').value;
-  const notes=document.getElementById('poi-notes').value.trim();
-  document.getElementById('add-status').innerHTML='<span style=color:var(--cy)>⏳ Menyimpan...</span>';
-  fetch('/api/maps/poi',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    email:(window.__USER||{}).email||'',name,lat:pickedLat,lng:pickedLng,city:CITY_M,category:cat,notes
-  })}).then(r=>r.json()).then(d=>{
-    if(d.ok){document.getElementById('add-status').innerHTML='<span style=color:#10B981>✅ '+d.message+'</span>';setTimeout(()=>location.reload(),1500);}
-    else{document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ '+d.error+'</span>';}
-  }).catch(function(){document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ Gagal. Coba login dulu.</span>';});
-}
 renderMarkers('all');
 /* Floating AI Chat for maps */
 (function(){
   var CIT=${JSON.stringify(city)};
   var COUNT=${hotels.length};
-  var BUDGET=${hotels.filter(h=>Number(h.price_idr)<800000).length};
-  var PREM=${hotels.filter(h=>(Number(h.stars)||4)>=4).length};
-  var AVG=${(hotels.reduce((s,h)=>s+(Number(h.rating)||4),0)/hotels.length).toFixed(1)};
+  var BUDGET=${hotels.filter(h=>h.price_idr<800000).length};
+  var PREM=${hotels.filter(h=>(h.stars||4)>=4).length};
+  var AVG=${(hotels.reduce((s,h)=>s+(h.rating||4),0)/hotels.length).toFixed(1)};
   var CHIPS=['hotel','budget','premium','wisata','itinerary','transport','booking'];
   function chatGen(msg){
     var t=msg.toLowerCase();
@@ -2724,10 +2649,8 @@ renderMarkers('all');
   window.hdChatSend=function(v){v=(v||'').trim();if(!v)return;var body=document.getElementById('hd-chat-body');var usr=document.createElement('div');usr.className='hd-chat-msg user';usr.textContent=v;body.appendChild(usr);var inp=document.getElementById('hd-chat-input');if(inp)inp.value='';body.scrollTop=body.scrollHeight;var tp=document.createElement('div');tp.className='hd-chat-typing';tp.textContent='🤖 mengetik...';body.appendChild(tp);setTimeout(function(){tp.remove();var b=document.createElement('div');b.className='hd-chat-msg bot';b.textContent=chatGen(v);body.appendChild(b);body.scrollTop=body.scrollHeight;},450);};
   function chatBoot(){var body=document.getElementById('hd-chat-body');var chips=document.getElementById('hd-chat-chips');var hello=document.createElement('div');hello.className='hd-chat-msg bot';hello.textContent='🤖 Halo! Ada '+COUNT+' hotel di '+CIT+' di peta ini. Mau cari hotel budget, premium, atau rekomendasi itinerary?';body.appendChild(hello);var labels={hotel:'🏨 Hotel',budget:'💰 Budget',premium:'🌟 Premium',wisata:'🌍 Wisata',itinerary:'🗺️ Itinerary',transport:'🚗 Transport',booking:'🛎️ Booking'};Object.keys(labels).forEach(function(k){var b=document.createElement('button');b.textContent=labels[k];b.onclick=function(){window.hdChatSend(k);};chips.appendChild(b);});}
 })();
-window.__USER = null;
-fetch('/auth/me').then(r=>r.json()).then(d=>{if(d.user)window.__USER=d.user;}).catch(function(){});
 </script>`;
-      res.send(shell({ title, desc, canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: mapHtml, user: req.user }));
+      res.send(shell({ title, desc, canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: mapHtml }));
     } catch (e) {
       res.status(500).send(shell({ title: 'Error', desc: 'Server error', canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: '<p>Error loading map</p>' }));
     }
