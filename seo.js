@@ -327,6 +327,20 @@ function shell({ title, desc, canonical, ogImage, body, schema, lang = 'id', use
 <meta name="twitter:description" content="${desc}">
 <meta name="twitter:image" content="${ogImage}">
 <meta name="robots" content="index,follow">
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-5QCP5QF51T"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-5QCP5QF51T', { send_page_view: true, cookie_flags: 'SameSite=None;Secure' });
+document.addEventListener('click', function(e) {
+  var el = e.target.closest('a[href*="/go?u="]');
+  if (el) {
+    var partner = el.className.match(/booking|agoda|traveloka|trip\.com|expedia/) || ['unknown'];
+    gtag('event', 'booking_click', { partner: partner[0], hotel: location.pathname.split('/').pop(), outbound_url: el.href });
+  }
+});
+</script>
 <meta name="theme-color" content="#0b1220">
 <link rel="icon" href="/hotels/favicon.ico">
 <link rel="alternate" hreflang="id" href="${canonical.replace('/en/','/')}">
