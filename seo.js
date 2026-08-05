@@ -191,7 +191,7 @@ nav a{margin-left:18px;font-size:14px;color:var(--mut)}nav a:hover{color:var(--c
 .hcard{background:var(--card);border:1px solid #1e293b;border-radius:14px;overflow:hidden;margin-bottom:24px}
 .hcard img{width:100%;height:320px;object-fit:cover;display:block}
 .hbody{padding:24px}
-.hbody h1{color:#fff;font-size:26px;margin-bottom:6px}
+.hbody h1{color:var(--txt);font-size:26px;margin-bottom:6px}
 .stars{color:#FFD700;letter-spacing:2px;font-size:16px}
 .addr{color:var(--mut);font-size:14px;margin:8px 0}
 .tags{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
@@ -201,18 +201,18 @@ nav a{margin-left:18px;font-size:14px;color:var(--mut)}nav a:hover{color:var(--c
 .cta:hover{transform:translateY(-2px)}
 .cta-primary{background:var(--cy);color:#060B13}
 .cta-alt{background:#0e2440;border:1px solid #155e75;color:var(--cy)}
-h2{color:#fff;font-size:20px;margin:28px 0 14px;border-bottom:1px solid #1e293b;padding-bottom:8px}
+h2{color:var(--txt);font-size:20px;margin:28px 0 14px;border-bottom:1px solid var(--border);padding-bottom:8px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
 .hcard-mini{background:var(--card);border:1px solid #1e293b;border-radius:12px;overflow:hidden}
 .hcard-mini img{width:100%;height:160px;object-fit:cover}
 .hmini-body{padding:14px}
-.hmini-body h3{color:#fff;font-size:16px;margin-bottom:4px}
+.hmini-body h3{color:var(--txt);font-size:16px;margin-bottom:4px}
 .hmini-body .stars{font-size:13px}
 .hmini-body .price{color:#34D399;font-weight:800;font-size:14px;margin-top:6px}
 .mini-cta{display:inline-block;margin-top:10px;background:var(--cy);color:#060B13;font-size:13px;font-weight:700;padding:7px 14px;border-radius:8px}
 .faq{margin-top:8px}
 .faq details{background:var(--card);border:1px solid #1e293b;border-radius:10px;padding:14px 16px;margin-bottom:10px}
-.faq summary{font-weight:700;color:#fff;cursor:pointer}
+.faq summary{font-weight:700;color:var(--txt);cursor:pointer}
 .faq p{color:var(--mut);font-size:14px;margin-top:8px}
 footer{border-top:1px solid #1e293b;padding:28px 24px;text-align:center;color:var(--mut);font-size:13px;margin-top:40px}
 footer a{color:var(--cy)}
@@ -222,14 +222,14 @@ footer a{color:var(--cy)}
 .review-list{display:flex;flex-direction:column;gap:12px}
 .review-card{background:var(--card);border:1px solid #1e293b;border-radius:12px;padding:14px 16px}
 .review-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
-.review-head b{color:#fff}
+.review-head b{color:var(--txt)}
 .review-date{color:var(--mut);font-size:12px;margin-left:auto}
-.review-card h3{color:#fff;font-size:15px;margin:6px 0 4px}
+.review-card h3{color:var(--txt);font-size:15px;margin:6px 0 4px}
 .review-card p{color:var(--mut);font-size:14px}
 .review-empty{color:var(--mut);font-style:italic}
 .review-form{background:var(--card);border:1px solid #1e293b;border-radius:12px;padding:16px;margin-top:14px}
-.review-form h3{color:#fff;margin-bottom:10px}
-.rv-stars{font-size:26px;cursor:pointer;letter-spacing:4px;color:#3b4a63;margin-bottom:8px}
+.review-form h3{color:var(--txt);margin-bottom:10px}
+.rv-stars{font-size:26px;cursor:pointer;letter-spacing:4px;color:var(--cy);margin-bottom:8px}}
 .review-form input[type=text],.review-form textarea{width:100%;background:#0b1220;border:1px solid #1e293b;color:var(--txt);border-radius:8px;padding:10px;margin-bottom:8px;font-family:inherit;font-size:14px}
 .review-form button{background:var(--cy);color:#060B13;border:none;padding:10px 20px;border-radius:8px;font-weight:800;cursor:pointer}
 #rv-msg{font-size:13px;margin-top:8px;color:var(--cy)}
@@ -521,7 +521,8 @@ Sitemap: ${SITE}/sitemap.xml
 
       // Dynamic POI sections from OSM map data (replaces generic templates)
       let poiSectionLandmark = '', poiSectionKuliner = '', poiSectionTransport = '', poiSectionBelanja = '';
-      let poiSup = { resto:0, kafe:0, wisata:0, belanja:0, transport:0 };
+      let poiSectionSehat = '', poiSectionIbadah = '', poiSectionTaman = '', poiSectionHotelLain = '';
+      let poiSup = { resto:0, kafe:0, wisata:0, belanja:0, transport:0, sehat:0, ibadah:0, taman:0, hotelLain:0 };
       try {
         const poiRow = await pool.query('SELECT poi_json FROM hotel_pois WHERE hotel_id=$1', [h.id]);
         if (poiRow.rows.length && poiRow.rows[0].poi_json && poiRow.rows[0].poi_json.poi) {
@@ -532,6 +533,10 @@ Sitemap: ${SITE}/sitemap.xml
             else if (p.cat === 'Wisata') poiSup.wisata++;
             else if (p.cat === 'Belanja') poiSup.belanja++;
             else if (p.cat === 'Transport') poiSup.transport++;
+            else if (p.cat === 'Kesehatan') poiSup.sehat++;
+            else if (p.cat === 'Tempat Ibadah') poiSup.ibadah++;
+            else if (p.cat === 'Taman') poiSup.taman++;
+            else if (p.cat === 'Hotel Lain') poiSup.hotelLain++;
           }
           const wisataSorted = pois.filter(p => p.cat === 'Wisata').sort((a,b) => a.dist_m - b.dist_m);
           const belanjaSorted = pois.filter(p => p.cat === 'Belanja').sort((a,b) => a.dist_m - b.dist_m);
@@ -572,6 +577,46 @@ Sitemap: ${SITE}/sitemap.xml
     <p>Terdapat ${poiSup.belanja} pusat belanja, ATM, dan minimarket dalam radius 2.5 km dari ${esc(h.name)}:</p>
     <div class="seo-grid-2">
       ${belanjaItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} · ${p.cat}</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
+          const sehatItems = pois.filter(p => p.cat === 'Kesehatan').sort((a,b) => a.dist_m - b.dist_m).slice(0, 10);
+          if (sehatItems.length) {
+            poiSectionSehat = `<section class="seo-section">
+    <h2>🏥 Fasilitas Kesehatan di Sekitar ${esc(h.name)}</h2>
+    <p>Dalam radius 5 km dari ${esc(h.name)} terdapat ${poiSup.sehat} fasilitas kesehatan. Berikut yang terdekat:</p>
+    <div class="seo-grid-2">
+      ${sehatItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} · ${p.cat}</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
+          const ibadahItems = pois.filter(p => p.cat === 'Tempat Ibadah').sort((a,b) => a.dist_m - b.dist_m).slice(0, 8);
+          if (ibadahItems.length) {
+            poiSectionIbadah = `<section class="seo-section">
+    <h2>🕌 Tempat Ibadah di Sekitar ${esc(h.name)}</h2>
+    <p>Dalam radius 5 km dari ${esc(h.name)} terdapat ${poiSup.ibadah} tempat ibadah. Berikut yang terdekat:</p>
+    <div class="seo-grid-2">
+      ${ibadahItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} dari hotel</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
+          const tamanItems = pois.filter(p => p.cat === 'Taman').sort((a,b) => a.dist_m - b.dist_m).slice(0, 10);
+          if (tamanItems.length) {
+            poiSectionTaman = `<section class="seo-section">
+    <h2>🌳 Taman, Pantai & Alam di Sekitar ${esc(h.name)}</h2>
+    <p>Dalam radius 10 km dari ${esc(h.name)} terdapat ${poiSup.taman} area taman, pantai, dan wisata alam. Berikut yang terdekat:</p>
+    <div class="seo-grid-2">
+      ${tamanItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} · ${p.cat}</span></div>`).join('')}
+    </div>
+  </section>`;
+          }
+          const hotelLainItems = pois.filter(p => p.cat === 'Hotel Lain').sort((a,b) => a.dist_m - b.dist_m).slice(0, 10);
+          if (hotelLainItems.length) {
+            poiSectionHotelLain = `<section class="seo-section">
+    <h2>🏨 Hotel Lain Terdekat</h2>
+    <p>Selain ${esc(h.name)}, dalam radius 5 km terdapat ${poiSup.hotelLain} hotel dan penginapan lain sebagai alternatif:</p>
+    <div class="seo-grid-2">
+      ${hotelLainItems.map(p => `<div class="seo-point"><strong>${p.emoji} ${esc(p.name)}</strong><span>${p.dist_m < 1000 ? p.dist_m + ' m' : (p.dist_m / 1000).toFixed(1) + ' km'} dari hotel</span></div>`).join('')}
     </div>
   </section>`;
           }
@@ -685,6 +730,10 @@ const body = `
   </section>
 
   ${poiSectionBelanja}
+  ${poiSectionSehat}
+  ${poiSectionIbadah}
+  ${poiSectionTaman}
+  ${poiSectionHotelLain}
   ${poiSectionTransport}
   <!-- 9. TRANSPORTASI (generik) -->
   <section class="seo-section">
@@ -1662,6 +1711,7 @@ loadReviews('pending');
     <div class="stat">💰 <b>${hotels.filter(h=>h.price_idr<800000).length}</b> budget</div>
     <div class="stat">🌟 <b>${hotels.filter(h=>(h.stars||4)>=4).length}</b> premium</div>
   </div>
+  <input type="text" id="hotel-search" placeholder="🔍 Cari hotel..." style="width:100%;padding:8px 10px;background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;font-size:12px;margin-bottom:8px" oninput="searchHotel(this.value)">
   <button onclick="filterAll()" class="active" id="btn-all">📍 Semua Hotel (${hotels.length})</button>
   <button onclick="filterBy('premium')" id="btn-premium">🌟 Premium (4-5 bintang)</button>
   <button onclick="filterBy('budget')" id="btn-budget">💰 Budget (<800rb)</button>
@@ -1692,6 +1742,26 @@ function renderMarkers(filter){
 }
 function filterAll(){activeFilter='all';renderMarkers('all');}
 function filterBy(f){activeFilter=f;renderMarkers(f);}
+function searchHotel(q){
+  if(!q){renderMarkers(activeFilter);return}
+  markers.forEach(m=>m.remove());markers.length=0;
+  const terms=q.toLowerCase().split(/\\s+/);
+  const matched=HOTELS.filter(h=>terms.some(t=>h.name.toLowerCase().includes(t)));
+  matched.sort((a,b)=>{
+    const sa=terms.filter(t=>a.name.toLowerCase().includes(t)).length;
+    const sb=terms.filter(t=>b.name.toLowerCase().includes(t)).length;
+    return sb-sa;
+  });
+  matched.slice(0,50).forEach(h=>{
+    const el=document.createElement('div');
+    el.style.cssText='width:26px;height:26px;background:#e04040;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.7);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;font-weight:bold';
+    el.textContent=h.stars>=5?'5':h.stars>=4?'4':'';
+    const m=new maplibregl.Marker({element:el}).setLngLat([h.lng,h.lat])
+      .setPopup(new maplibregl.Popup().setHTML('<h3>'+h.name+'</h3><div class=\\"stars\\">'+'★'.repeat(h.stars>=5?5:h.stars>=4?4:3)+' '+(h.rating||4)+'/5</div>'+(h.price?'<div>from Rp '+(h.price/1000000).toFixed(1)+' jt</div>':'')+'<a href=\\"/hotel/'+h.slug+'\\">Lihat Detail & Booking →</a>'))
+      .addTo(map);
+    markers.push(m);
+  });
+}
 renderMarkers('all');
 </script>`;
       res.send(shell({ title, desc, canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: mapHtml }));
