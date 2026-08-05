@@ -2570,7 +2570,8 @@ loadReviews('pending');
     <textarea id="poi-notes" placeholder="Catatan (opsional)..." rows="2" style="width:100%;padding:10px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:8px;font-size:13px;resize:vertical;"></textarea>
     <p style="font-size:11px;color:var(--mut);margin-bottom:12px;">📍 Klik pada peta untuk pilih lokasi, lalu isi form.</p>
     <div style="display:flex;gap:8px;">
-      <button onclick="submitPoi()" style="flex:1;padding:10px;background:var(--cy);color:#060B13;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">💾 Simpan</button>
+      <button id="poi-submit-btn" onclick="submitPoi()" style="flex:1;padding:10px;background:var(--cy);color:#060B13;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">💾 Simpan</button>
+      <button id="poi-login-btn" onclick="location.href='/auth/login?redirect='+encodeURIComponent('/maps/'+CITY_M)" style="flex:1;padding:10px;background:linear-gradient(135deg,#4285f4,#2b7de9);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;display:none;">🔐 Login Google</button>
       <button onclick="hideAddForm()" style="flex:1;padding:10px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:8px;cursor:pointer;font-size:13px;">Batal</button>
     </div>
   </div>
@@ -2653,7 +2654,7 @@ fetch('/maps/api/poi?city='+encodeURIComponent(CITY_M)).then(r=>r.json()).then(d
 });
 
 map.on('click',function(e){pickedLat=e.lngLat.lat;pickedLng=e.lngLat.lng;});
-function showAddForm(){document.getElementById('add-modal').style.display='flex';}
+function showAddForm(){document.getElementById('add-modal').style.display='flex';if(window.__USER&&window.__USER.email){document.getElementById('add-status').innerHTML='📍 Klik pada peta untuk pilih lokasi, lalu isi form.';document.getElementById('poi-submit-btn').style.display='';document.getElementById('poi-login-btn').style.display='none';}else{document.getElementById('add-status').innerHTML='<span style=color:#f0c040>⚠️ Silakan login dulu untuk menambah lokasi.</span>';document.getElementById('poi-submit-btn').style.display='none';document.getElementById('poi-login-btn').style.display='';}}
 function hideAddForm(){document.getElementById('add-modal').style.display='none';}
 async function submitPoi(){
   const name=document.getElementById('poi-name').value.trim();
@@ -2692,8 +2693,9 @@ renderMarkers('all');
   window.hdChatSend=function(v){v=(v||'').trim();if(!v)return;var body=document.getElementById('hd-chat-body');var usr=document.createElement('div');usr.className='hd-chat-msg user';usr.textContent=v;body.appendChild(usr);var inp=document.getElementById('hd-chat-input');if(inp)inp.value='';body.scrollTop=body.scrollHeight;var tp=document.createElement('div');tp.className='hd-chat-typing';tp.textContent='🤖 mengetik...';body.appendChild(tp);setTimeout(function(){tp.remove();var b=document.createElement('div');b.className='hd-chat-msg bot';b.textContent=chatGen(v);body.appendChild(b);body.scrollTop=body.scrollHeight;},450);};
   function chatBoot(){var body=document.getElementById('hd-chat-body');var chips=document.getElementById('hd-chat-chips');var hello=document.createElement('div');hello.className='hd-chat-msg bot';hello.textContent='🤖 Halo! Ada '+COUNT+' hotel di '+CIT+' di peta ini. Mau cari hotel budget, premium, atau rekomendasi itinerary?';body.appendChild(hello);var labels={hotel:'🏨 Hotel',budget:'💰 Budget',premium:'🌟 Premium',wisata:'🌍 Wisata',itinerary:'🗺️ Itinerary',transport:'🚗 Transport',booking:'🛎️ Booking'};Object.keys(labels).forEach(function(k){var b=document.createElement('button');b.textContent=labels[k];b.onclick=function(){window.hdChatSend(k);};chips.appendChild(b);});}
 })();
+window.__USER = ${JSON.stringify(req.user ? { email: req.user.email, name: req.user.name, avatar: req.user.avatar } : null)};
 </script>`;
-      res.send(shell({ title, desc, canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: mapHtml }));
+      res.send(shell({ title, desc, canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: mapHtml, user: req.user }));
     } catch (e) {
       res.status(500).send(shell({ title: 'Error', desc: 'Server error', canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: '<p>Error loading map</p>' }));
     }
