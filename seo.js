@@ -2507,7 +2507,7 @@ loadReviews('pending');
       
       const hotelsJson = JSON.stringify(hotels.map(h => ({
         id: h.id, name: h.name, slug: h.slug, lat: h.lat, lng: h.lng,
-        stars: h.stars || 4, rating: h.rating, price: h.price_idr
+        stars: Number(h.stars) || 4, rating: Number(h.rating) || 4, price: Number(h.price_idr) || null
       })));
       
       const title = `Peta Interaktif Hotel di ${city.charAt(0).toUpperCase()+city.slice(1)} — MyTriv Maps`;
@@ -2547,9 +2547,9 @@ loadReviews('pending');
   <h1>🏨 Hotel di ${esc(city)}</h1>
   <div class="sub">${hotels.length} hotel — MyTriv Maps Explorer</div>
   <div class="stats">
-    <div class="stat">⭐ <b>${(hotels.reduce((s,h)=>s+(h.rating||4),0)/hotels.length).toFixed(1)}</b> avg rating</div>
-    <div class="stat">💰 <b>${hotels.filter(h=>h.price_idr<800000).length}</b> budget</div>
-    <div class="stat">🌟 <b>${hotels.filter(h=>(h.stars||4)>=4).length}</b> premium</div>
+    <div class="stat">⭐ <b>${(hotels.reduce((s,h)=>s+(Number(h.rating)||4),0)/hotels.length).toFixed(1)}</b> avg rating</div>
+    <div class="stat">💰 <b>${hotels.filter(h=>Number(h.price_idr)<800000).length}</b> budget</div>
+    <div class="stat">🌟 <b>${hotels.filter(h=>(Number(h.stars)||4)>=4).length}</b> premium</div>
   </div>
   <input type="text" id="hotel-search" placeholder="🔍 Cari hotel..." style="width:100%;padding:8px 10px;background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;font-size:12px;margin-bottom:8px" oninput="searchHotel(this.value)">
   <button onclick="filterAll()" class="active" id="btn-all">📍 Semua Hotel (${hotels.length})</button>
@@ -2654,7 +2654,22 @@ fetch('/maps/api/poi?city='+encodeURIComponent(CITY_M)).then(r=>r.json()).then(d
 });
 
 map.on('click',function(e){pickedLat=e.lngLat.lat;pickedLng=e.lngLat.lng;});
-function showAddForm(){document.getElementById('add-modal').style.display='flex';if(window.__USER&&window.__USER.email){document.getElementById('add-status').innerHTML='📍 Klik pada peta untuk pilih lokasi, lalu isi form.';document.getElementById('poi-submit-btn').style.display='';document.getElementById('poi-login-btn').style.display='none';}else{document.getElementById('add-status').innerHTML='<span style=color:#f0c040>⚠️ Silakan login dulu untuk menambah lokasi.</span>';document.getElementById('poi-submit-btn').style.display='none';document.getElementById('poi-login-btn').style.display='';}}
+function showAddForm(){
+  document.getElementById('add-modal').style.display='flex';
+  if(window.__USER&&window.__USER.email){
+    document.getElementById('add-status').innerHTML='📍 Klik pada peta untuk pilih lokasi, lalu isi form.';
+    document.getElementById('poi-submit-btn').style.display='';
+    document.getElementById('poi-login-btn').style.display='none';
+  }else{
+    document.getElementById('add-status').innerHTML='<span style=color:var(--cy)>⏳ Memeriksa login...</span>';
+    document.getElementById('poi-submit-btn').style.display='none';
+    document.getElementById('poi-login-btn').style.display='none';
+    fetch('/auth/me').then(r=>r.json()).then(d=>{
+      if(d.user){window.__USER=d.user;document.getElementById('add-status').innerHTML='📍 Klik pada peta untuk pilih lokasi, lalu isi form.';document.getElementById('poi-submit-btn').style.display='';document.getElementById('poi-login-btn').style.display='none';}
+      else{document.getElementById('add-status').innerHTML='<span style=color:#f0c040>⚠️ Silakan login dulu untuk menambah lokasi.</span>';document.getElementById('poi-login-btn').style.display='';}
+    }).catch(function(){document.getElementById('add-status').innerHTML='<span style=color:#ef4444>⚠️ Gagal cek login. Coba refresh.</span>';});
+  }
+}
 function hideAddForm(){document.getElementById('add-modal').style.display='none';}
 async function submitPoi(){
   const name=document.getElementById('poi-name').value.trim();
@@ -2674,9 +2689,9 @@ renderMarkers('all');
 (function(){
   var CIT=${JSON.stringify(city)};
   var COUNT=${hotels.length};
-  var BUDGET=${hotels.filter(h=>h.price_idr<800000).length};
-  var PREM=${hotels.filter(h=>(h.stars||4)>=4).length};
-  var AVG=${(hotels.reduce((s,h)=>s+(h.rating||4),0)/hotels.length).toFixed(1)};
+  var BUDGET=${hotels.filter(h=>Number(h.price_idr)<800000).length};
+  var PREM=${hotels.filter(h=>(Number(h.stars)||4)>=4).length};
+  var AVG=${(hotels.reduce((s,h)=>s+(Number(h.rating)||4),0)/hotels.length).toFixed(1)};
   var CHIPS=['hotel','budget','premium','wisata','itinerary','transport','booking'];
   function chatGen(msg){
     var t=msg.toLowerCase();
@@ -2693,7 +2708,8 @@ renderMarkers('all');
   window.hdChatSend=function(v){v=(v||'').trim();if(!v)return;var body=document.getElementById('hd-chat-body');var usr=document.createElement('div');usr.className='hd-chat-msg user';usr.textContent=v;body.appendChild(usr);var inp=document.getElementById('hd-chat-input');if(inp)inp.value='';body.scrollTop=body.scrollHeight;var tp=document.createElement('div');tp.className='hd-chat-typing';tp.textContent='🤖 mengetik...';body.appendChild(tp);setTimeout(function(){tp.remove();var b=document.createElement('div');b.className='hd-chat-msg bot';b.textContent=chatGen(v);body.appendChild(b);body.scrollTop=body.scrollHeight;},450);};
   function chatBoot(){var body=document.getElementById('hd-chat-body');var chips=document.getElementById('hd-chat-chips');var hello=document.createElement('div');hello.className='hd-chat-msg bot';hello.textContent='🤖 Halo! Ada '+COUNT+' hotel di '+CIT+' di peta ini. Mau cari hotel budget, premium, atau rekomendasi itinerary?';body.appendChild(hello);var labels={hotel:'🏨 Hotel',budget:'💰 Budget',premium:'🌟 Premium',wisata:'🌍 Wisata',itinerary:'🗺️ Itinerary',transport:'🚗 Transport',booking:'🛎️ Booking'};Object.keys(labels).forEach(function(k){var b=document.createElement('button');b.textContent=labels[k];b.onclick=function(){window.hdChatSend(k);};chips.appendChild(b);});}
 })();
-window.__USER = ${JSON.stringify(req.user ? { email: req.user.email, name: req.user.name, avatar: req.user.avatar } : null)};
+window.__USER = null;
+fetch('/auth/me').then(r=>r.json()).then(d=>{if(d.user)window.__USER=d.user;}).catch(function(){});
 </script>`;
       res.send(shell({ title, desc, canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: mapHtml, user: req.user }));
     } catch (e) {
