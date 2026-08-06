@@ -422,6 +422,62 @@ footer a{color:var(--cy)}
 #rv-msg{font-size:13px;margin-top:8px;color:var(--cy)}
 @media(max-width:640px){.ctas{grid-template-columns:1fr}.hero h1{font-size:24px}}
 
+/* ═══ LANDING PAGE (Booking.com + TripAdvisor style) ═══ */
+.lp-page{min-height:100vh}
+.lp-hero{position:relative;background:linear-gradient(135deg,#0b1220 0%,#0e2440 55%,#0b3a5e 100%);padding:64px 24px 72px;text-align:center;overflow:hidden}
+.lp-hero:before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 20% 20%,rgba(2,132,199,.25),transparent 55%),radial-gradient(ellipse at 80% 70%,rgba(16,185,129,.18),transparent 50%)}
+.lp-hero .lp-in{position:relative;max-width:1100px;margin:0 auto}
+.lp-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(2,132,199,.15);border:1px solid #155e75;color:#7dd3fc;padding:6px 16px;border-radius:30px;font-size:13px;font-weight:700;margin-bottom:18px}
+.lp-hero h1{font-size:clamp(30px,5vw,52px);color:#fff;line-height:1.15;margin-bottom:14px;font-weight:900}
+.lp-hero h1 span{color:#38bdf8}
+.lp-hero p{color:#94a3b8;font-size:clamp(15px,2vw,18px);max-width:720px;margin:0 auto 28px}
+.lp-search{display:flex;flex-wrap:wrap;gap:10px;background:var(--card);border:1px solid #1e293b;padding:10px;border-radius:16px;max-width:760px;margin:0 auto;box-shadow:0 20px 50px rgba(0,0,0,.4)}
+.lp-search input{flex:1 1 180px;min-width:140px;background:#0b1220;border:1px solid #1e293b;color:var(--txt);border-radius:10px;padding:13px 14px;font-size:15px;font-family:inherit;outline:none}
+.lp-search input:focus{border-color:var(--cy)}
+.lp-search button{background:var(--cy);color:#060B13;border:none;border-radius:10px;padding:13px 26px;font-weight:800;font-size:15px;cursor:pointer;flex:0 0 auto}
+.lp-stats{display:flex;flex-wrap:wrap;justify-content:center;gap:26px;margin-top:34px}
+.lp-stat b{display:block;font-size:26px;color:#fff;font-weight:900}
+.lp-stat span{color:#94a3b8;font-size:13px}
+.lp-wrap{max-width:1400px;margin:0 auto;padding:44px 24px}
+.lp-sec-title{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.lp-sec-title h2{font-size:26px;font-weight:900;border:none;margin:0;color:var(--txt)}
+.lp-sec-title span{color:var(--cy);font-size:20px}
+.lp-sec-sub{color:var(--mut);font-size:14px;margin-bottom:22px}
+.lp-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+.lp-city{position:relative;border-radius:16px;overflow:hidden;height:200px;display:block;text-decoration:none;border:1px solid #1e293b;background:#0e2440}
+.lp-city img{width:100%;height:100%;object-fit:cover;transition:transform .35s}
+.lp-city:hover img{transform:scale(1.07)}
+.lp-city .lp-city-ov{position:absolute;inset:0;background:linear-gradient(180deg,transparent 35%,rgba(2,6,17,.92) 100%);display:flex;flex-direction:column;justify-content:flex-end;padding:16px}
+.lp-city .lp-city-ov h3{color:#fff;font-size:18px;font-weight:800;margin-bottom:2px}
+.lp-city .lp-city-ov span{color:#94a3b8;font-size:13px}
+.lp-city .lp-city-ov b{color:#34d399;font-size:13px}
+.lp-hotel{background:var(--card);border:1px solid #1e293b;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s}
+.lp-hotel:hover{transform:translateY(-4px);box-shadow:0 16px 40px rgba(0,0,0,.35)}
+.lp-hotel .lp-img{position:relative;height:170px;overflow:hidden}
+.lp-hotel .lp-img img{width:100%;height:100%;object-fit:cover}
+.lp-hotel .lp-score{position:absolute;top:10px;right:10px;background:rgba(4,120,87,.92);color:#a7f3d0;font-weight:800;font-size:13px;padding:4px 10px;border-radius:8px}
+.lp-hotel .lp-body{padding:14px 16px;flex:1;display:flex;flex-direction:column}
+.lp-hotel h3{font-size:16px;font-weight:800;color:var(--txt);margin-bottom:4px;line-height:1.3}
+.lp-hotel .lp-city-name{color:var(--mut);font-size:13px;margin-bottom:6px}
+.lp-hotel .lp-stars{color:#FFD700;font-size:13px;margin-bottom:8px}
+.lp-hotel .lp-price{color:#34D399;font-weight:800;font-size:15px;margin-top:auto}
+.lp-hotel .lp-cta{margin-top:10px;background:var(--cy);color:#060B13;text-align:center;padding:9px;border-radius:9px;font-weight:800;font-size:13px}
+.lp-benefits{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:8px}
+.lp-benefit{background:var(--card);border:1px solid #1e293b;border-radius:14px;padding:20px;display:flex;gap:14px;align-items:flex-start}
+.lp-benefit .lp-b-ic{font-size:26px;background:#0e2440;border:1px solid #155e75;width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.lp-benefit b{display:block;color:var(--txt);margin-bottom:4px}
+.lp-benefit p{color:var(--mut);font-size:13px;margin:0}
+.lp-cta-band{background:linear-gradient(135deg,#065f46,#0e7490);border-radius:18px;padding:36px 28px;text-align:center;margin-top:44px}
+.lp-cta-band h2{color:#fff;border:none;margin:0 0 8px;font-size:28px}
+.lp-cta-band p{color:#a7f3d0;margin:0 0 20px;font-size:15px}
+.lp-cta-band .cta{max-width:320px;margin:0 auto}
+.lp-monopoly{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(217,119,6,.08));border:1px solid rgba(245,158,11,.3);border-radius:14px;padding:18px 20px;margin-top:40px}
+.lp-monopoly .lp-m-ic{font-size:32px}
+.lp-monopoly b{color:var(--txt);display:block;margin-bottom:2px}
+.lp-monopoly p{color:var(--mut);font-size:13px;margin:0;flex:1}
+.lp-monopoly a{background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:800;padding:10px 20px;border-radius:10px;font-size:13px;white-space:nowrap}
+@media(max-width:640px){.lp-stats{gap:16px}.lp-stat b{font-size:20px}.lp-wrap{padding:30px 16px}}
+
 /* ═══ MODERN HOTEL LAYOUT (Booking.com + Airbnb + TripAdvisor) ═══ */
 .hd-page .wrap{max-width:1560px;padding:18px 26px}
 .hd-wrap{width:100%}
@@ -2355,7 +2411,7 @@ const body = `
     } catch(e) { console.error('en hotel page error:', e.message); res.status(500).send('error'); }
   });
 
-  // ---- Country page ----
+  // ---- Country page (Booking.com + TripAdvisor style landing) ----
   router.get('/hotels/:country', async (req, res) => {
     try {
       const { country } = req.params;
@@ -2366,30 +2422,76 @@ const body = `
       const hotels = await pool.query(`SELECT h.name, h.slug, h.stars, h.rating, h.price_idr, h.image, c.name AS city_name FROM hotels h JOIN cities c ON c.id = h.city_id WHERE c.country_code = $1 ORDER BY h.rating DESC NULLS LAST LIMIT 12`, [c.code]);
       const totalHotels = await pool.query('SELECT count(*) FROM hotels h JOIN cities c ON c.id = h.city_id WHERE c.country_code = $1', [c.code]);
       hotels.rows = hotels.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
+      const total = totalHotels.rows[0].count;
 
-      const title = `Hotel di ${c.name} — ${totalHotels.rows[0].count} Hotel Terbaik | MyTriv Hotels`;
-      const desc = `Cari hotel terbaik di ${c.name}. ${cities.rows.length} kota dengan hotel murah & mewah. Bandingkan harga Booking.com, Agoda, Trip.com & Traveloka.`;
+      const title = `Hotel di ${c.name} — ${total} Hotel Terbaik | MyTriv Hotels`;
+      const desc = `Cari hotel terbaik di ${c.name}. ${cities.rows.length} kota dengan hotel murah & mewah. Bandingkan harga Booking.com, Agoda, Trip.com, Traveloka & Expedia. Gratis!`;
+      const cityCards = cities.rows.map(ct => `<a class="lp-city" href="/hotels/${country}/${ct.slug}" style="text-decoration:none">
+        <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=70" alt="Hotel di ${esc(ct.name)}" loading="lazy">
+        <div class="lp-city-ov"><h3>${esc(ct.name)}</h3><span>${ct.hotel_count} hotel tersedia</span></div>
+      </a>`).join('') || '<p style="color:var(--mut)">Kota akan segera ditambahkan.</p>';
+      const hotelCards = hotels.rows.map(n => `<div class="lp-hotel">
+        <div class="lp-img"><img src="${hotelImage(n, 500)}" alt="${esc(n.name)}" loading="lazy">
+          <span class="lp-score">${Number(n.rating || 0).toFixed(1)}/5</span></div>
+        <div class="lp-body">
+          <h3>${esc(n.name)}</h3>
+          <div class="lp-city-name">📍 ${esc(n.city_name)}</div>
+          <div class="lp-stars">${'★'.repeat(n.stars || 4)}</div>
+          <div class="lp-price">${fmtPrice(n.price_idr)} / malam</div>
+          <a class="lp-cta" href="/hotel/${n.slug}">Lihat & Booking →</a>
+        </div>
+      </div>`).join('') || '<p style="color:var(--mut)">Hotel akan segera ditambahkan.</p>';
       const body = `
-<div class="crumbs"><a href="/hotels">Beranda</a> › <b>${esc(c.name)}</b></div>
-<div class="hero"><h1>Hotel di ${esc(c.name)}</h1><p>${desc}</p></div>
-<div class="wrap">
-  <h2>Kota populer di ${esc(c.name)}</h2>
-  <div class="grid">
-    ${cities.rows.map(ct => `<a href="/hotels/${country}/${ct.slug}" class="hcard-mini" style="text-decoration:none">
-      <div class="hmini-body"><h3>${esc(ct.name)}</h3><div class="price">${ct.hotel_count} hotel</div></div>
-    </a>`).join('') || '<p style="color:var(--mut)">Kota akan segera ditambahkan.</p>'}
+<div class="lp-page">
+  <div class="lp-hero">
+    <div class="lp-in">
+      <div class="lp-badge">🌍 Cari hotel terbaik · Bandingkan 8 OTA sekaligus</div>
+      <h1>Hotel di <span>${esc(c.name)}</span><br>Bandingkan Harga &amp; Pesan</h1>
+      <p>${desc}</p>
+      <form class="lp-search" action="/hotels/" method="get" onsubmit="event.preventDefault();var q=this.querySelector('input').value.trim();if(q)location.href='/hotels/'+q.toLowerCase().replace(/\\s+/g,'-');">
+        <input type="text" placeholder="Cari kota di ${esc(c.name)}... (contoh: bali, jakarta)" aria-label="Cari kota">
+        <button type="submit">🔍 Cari Hotel</button>
+      </form>
+      <div class="lp-stats">
+        <div class="lp-stat"><b>${Number(total).toLocaleString('id-ID')}</b><span>Hotel tersedia</span></div>
+        <div class="lp-stat"><b>${cities.rows.length}</b><span>Kota</span></div>
+        <div class="lp-stat"><b>8</b><span>OTA Partner</span></div>
+        <div class="lp-stat"><b>0</b><span>Biaya Layanan</span></div>
+      </div>
+    </div>
   </div>
-  <h2>Hotel terbaik di ${esc(c.name)}</h2>
-  <div class="grid">
-    ${hotels.rows.map(n => `<div class="hcard-mini">
-      <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
-      <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)}</div>
-      <div style="color:var(--mut);font-size:13px">${esc(n.city_name)}</div><div class="price">${fmtPrice(n.price_idr)}</div>
-      <a class="mini-cta" href="/hotel/${n.slug}">Lihat & Booking</a></div>
-    </div>`).join('')}
+  <div class="lp-wrap">
+    <div class="lp-sec-title"><span>🏙️</span><h2>Destinasi Populer di ${esc(c.name)}</h2></div>
+    <div class="lp-sec-sub">Pilih kota favoritmu dan temukan hotel dengan harga terbaik</div>
+    <div class="lp-cards">${cityCards}</div>
+
+    <div class="lp-sec-title" style="margin-top:44px"><span>⭐</span><h2>Hotel Terbaik di ${esc(c.name)}</h2></div>
+    <div class="lp-sec-sub">Hotel rating tertinggi berdasarkan ulasan traveler</div>
+    <div class="lp-cards">${hotelCards}</div>
+
+    <div class="lp-sec-title" style="margin-top:44px"><span>💎</span><h2>Kenapa Pesan di MyTriv?</h2></div>
+    <div class="lp-sec-sub">Kami bandingkan harga dari semua OTA besar supaya kamu dapat harga termurah</div>
+    <div class="lp-benefits">
+      <div class="lp-benefit"><div class="lp-b-ic">💰</div><div><b>Harga Termurah</b><p>Bandingkan harga dari 8 OTA sekaligus dan dapatkan penawaran terbaik.</p></div></div>
+      <div class="lp-benefit"><div class="lp-b-ic">⚡</div><div><b>Tanpa Biaya</b><p>100% gratis. Tidak ada biaya tambahan untuk membandingkan atau booking.</p></div></div>
+      <div class="lp-benefit"><div class="lp-b-ic">🔒</div><div><b>Booking Aman</b><p>Booking langsung di OTA partner resmi yang sudah terpercaya.</p></div></div>
+      <div class="lp-benefit"><div class="lp-b-ic">🌏</div><div><b>Lengkap</b><p>270.000+ hotel di 190+ negara siap dibandingkan.</p></div></div>
+    </div>
+
+    <div class="lp-monopoly">
+      <div class="lp-m-ic">🎲</div>
+      <div><b>MyTriv Virtual Hotel Monopoly</b><p>Mainkan monopoli virtual global — beli hotel, bangun properti, dan bersaing di leaderboard!</p></div>
+      <a href="/hotels/" target="_blank" rel="noopener">Mainkan Game →</a>
+    </div>
+
+    <div class="lp-cta-band">
+      <h2>🛎️ Siap Pesan Hotel di ${esc(c.name)}?</h2>
+      <p>Bandingkan harga terbaik dan dapatkan penawaran eksklusif dari 8 OTA partner.</p>
+      <a class="cta cta-primary" href="/hotels/${country}">Jelajahi Semua Hotel →</a>
+    </div>
   </div>
 </div>`;
-      const schema = { '@context': 'https://schema.org', '@type': 'Country', name: c.name, url: SITE + '/hotels/' + country };
+      const schema = { '@context': 'https://schema.org', '@type': 'CollectionPage', name: `Hotel di ${c.name}`, url: SITE + '/hotels/' + country, description: desc };
       res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
       res.send(shell({ title, desc, canonical: `${SITE}/hotels/${country}`, ogImage: hotelImage({}, 800), body, schema, user: req.user }));
     } catch (e) { console.error('country page error:', e.message); res.status(500).send('error'); }
