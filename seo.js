@@ -358,7 +358,7 @@ ${jsonLd({
   url: SITE,
   logo: SITE + '/hotels/logo.png',
   sameAs: ['https://x.com/mytrivhotels', 'https://instagram.com/mytrivhotels'],
-  description: 'MyTriv Hotels — Bandingkan 8 OTA booking hotel di 190+ negara. Virtual Hotel Monopoly & AI Travel.',
+  description: 'MyTriv Hotels — Bandingkan 8 OTA booking hotel di 190+ negara. Jelajahi AI Map Explorer & miliki virtual hotel, dapatkan poin di setiap kunjungan.',
 })}
 <style>
 :root{--cy:#00F0FF;--bg:#060B13;--card:#0e1624;--txt:#E2E8F0;--mut:#94A3B8;--border:#1e293b;}
@@ -471,11 +471,11 @@ footer a{color:var(--cy)}
 .lp-cta-band h2{color:#fff;border:none;margin:0 0 8px;font-size:28px}
 .lp-cta-band p{color:#a7f3d0;margin:0 0 20px;font-size:15px}
 .lp-cta-band .cta{max-width:320px;margin:0 auto}
-.lp-monopoly{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(217,119,6,.08));border:1px solid rgba(245,158,11,.3);border-radius:14px;padding:18px 20px;margin-top:40px}
-.lp-monopoly .lp-m-ic{font-size:32px}
-.lp-monopoly b{color:var(--txt);display:block;margin-bottom:2px}
-.lp-monopoly p{color:var(--mut);font-size:13px;margin:0;flex:1}
-.lp-monopoly a{background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:800;padding:10px 20px;border-radius:10px;font-size:13px;white-space:nowrap}
+.lp-feature-band{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(2,132,199,.08));border:1px solid rgba(16,185,129,.3);border-radius:14px;padding:18px 20px;margin-top:40px}
+.lp-feature-band .lp-f-ic{font-size:32px}
+.lp-feature-band b{color:var(--txt);display:block;margin-bottom:2px}
+.lp-feature-band p{color:var(--mut);font-size:13px;margin:0;flex:1}
+.lp-feature-band a{background:linear-gradient(135deg,#10b981,#0891b2);color:#000;font-weight:800;padding:10px 20px;border-radius:10px;font-size:13px;white-space:nowrap}
 @media(max-width:640px){.lp-stats{gap:16px}.lp-stat b{font-size:20px}.lp-wrap{padding:30px 16px}}
 
 /* ═══ MODERN HOTEL LAYOUT (Booking.com + Airbnb + TripAdvisor) ═══ */
@@ -748,7 +748,7 @@ footer a{color:var(--cy)}
 ${user ? `<a href="/auth/logout?redirect=${backPath}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">👤 ${esc(user.name || user.email)} · Keluar</a>` : `<a href="/auth/login?redirect=${backPath}" style="background:var(--card);border:1px solid var(--border);color:var(--txt);padding:4px 10px;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">🔐 Masuk</a>`}
 </nav></header>
 ${body}
-<footer style="padding:32px 24px;border-top:1px solid var(--border);margin-top:40px;color:var(--mut);font-size:13px;line-height:2;"><div style="max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;"><div><strong style="color:var(--txt);">Top Countries</strong><br><a href="/hotels/indonesia">Indonesia</a><br><a href="/hotels/thailand">Thailand</a><br><a href="/hotels/japan">Japan</a><br><a href="/hotels/singapore">Singapore</a><br><a href="/hotels/malaysia">Malaysia</a></div><div><strong style="color:var(--txt);">Popular Cities</strong><br><a href="/hotels/indonesia/bali">Bali</a><br><a href="/hotels/thailand/bangkok">Bangkok</a><br><a href="/hotels/japan/tokyo">Tokyo</a><br><a href="/hotels/france/paris">Paris</a><br><a href="/hotels/united-kingdom/london">London</a></div><div><strong style="color:var(--txt);">MyTriv</strong><br><a href="/maps/">🗺️ Map Explorer</a><br><a href="/book/">Booking</a><br><a href="/hotels/about.html">Panduan Monopoly</a><br><a href="/hotels/">190+ Negara</a></div><div><strong style="color:var(--txt);">Partners</strong><br><span>Booking · Agoda · Trip<br>Traveloka · Expedia<br>Hotels.com · Kayak · Klook</span></div></div><p style="text-align:center;margin-top:20px;">MyTriv Hotels — 120.000+ hotel di 190+ negara. Bandingkan 8 OTA. Virtual Monopoly.</p><p style="text-align:center;font-size:11px;">© 2026 MyTriv · Harga estimasi</p> Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka, Expedia).</p>
+<footer style="padding:32px 24px;border-top:1px solid var(--border);margin-top:40px;color:var(--mut);font-size:13px;line-height:2;"><div style="max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;"><div><strong style="color:var(--txt);">Top Countries</strong><br><a href="/hotels/indonesia">Indonesia</a><br><a href="/hotels/thailand">Thailand</a><br><a href="/hotels/japan">Japan</a><br><a href="/hotels/singapore">Singapore</a><br><a href="/hotels/malaysia">Malaysia</a></div><div><strong style="color:var(--txt);">Popular Cities</strong><br><a href="/hotels/indonesia/bali">Bali</a><br><a href="/hotels/thailand/bangkok">Bangkok</a><br><a href="/hotels/japan/tokyo">Tokyo</a><br><a href="/hotels/france/paris">Paris</a><br><a href="/hotels/united-kingdom/london">London</a></div><div><strong style="color:var(--txt);">MyTriv</strong><br><a href="/maps/">🗺️ Map Explorer</a><br><a href="/book/">Booking</a><br><a href="/hotels/about.html">Tentang MyTriv</a><br><a href="/corp/">🏢 MyTriv Corp</a><br><a href="/hotels/">190+ Negara</a></div><div><strong style="color:var(--txt);">Partners</strong><br><span>Booking · Agoda · Trip<br>Traveloka · Expedia<br>Hotels.com · Kayak · Klook</span></div></div><p style="text-align:center;margin-top:20px;">MyTriv Hotels — 120.000+ hotel di 190+ negara. Bandingkan 8 OTA. Peta interaktif &amp; virtual hotel.</p><p style="text-align:center;">🏢 MyTriv Hotels adalah unit bisnis dari <a href="/corp/">MyTriv Corporation</a>.</p><p style="text-align:center;font-size:11px;">© 2026 MyTriv · Harga estimasi</p> Harga referensi &amp; link booking dari partner resmi (Booking.com, Agoda, Trip.com, Traveloka, Expedia).</p>
 <p><a href="/sitemap.xml">Sitemap</a> · <a href="/maps">🗺️ Map Explorer</a> · © 2026 MyTriv</p></footer>
 <script>
 (function(){var m=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',m);})();
@@ -1460,7 +1460,7 @@ const body = `
       </div>
     </div>
 
-    <!-- SIDEBAR: VIRTUAL MONOPOLY DASHBOARD -->
+    <!-- SIDEBAR: VIRTUAL HOTEL DASHBOARD -->
     <div class="vm-dash">
       <div class="vm-owner">
         <div class="av">${h.owner_name ? '👑' : '🏰'}</div>
@@ -1477,22 +1477,22 @@ const body = `
   </aside>
   </div><!-- /.hd-layout -->
 
-  <!-- 14. VIRTUAL MONOPOLY SECTION -->
+  <!-- 14. VIRTUAL HOTEL SECTION -->
   <section class="seo-section">
-    <h2>🎲 Virtual Hotel Monopoly — ${esc(h.name)}</h2>
+    <h2>🏨 Virtual Hotel — ${esc(h.name)}</h2>
     ${h.owner_name ? `
     <div class="seo-content">
       <p><strong>👑 Pemilik Virtual:</strong> ${esc(h.owner_name)}</p>
       <p><strong>💰 Harga Pembelian:</strong> ${fmtPrice(h.purchase_price || 10000)} TrivCoin</p>
       <p><strong>🏪 Marketplace Status:</strong> ${h.is_for_sale ? '🟢 Dijual (' + fmtPrice(h.sale_price || 0) + ' TrivCoin)' : '🔴 Tidak Dijual'}</p>
-      <p>Hotel ini dimiliki secara virtual dalam game <a href="/hotels/">MyTriv Virtual Hotel Monopoly</a>. Pemilik dapat mengedit halaman, menambahkan promo, dan mendapatkan poin reward.</p>
+      <p>Hotel ini dimiliki secara virtual di <a href="/hotels/">MyTriv Virtual Hotel</a>. Jelajahi AI Map Explorer untuk mengumpulkan poin, lalu klaim &amp; kelola virtual hotel ini — edit halaman, tambahkan promo, dan dapatkan poin reward.</p>
     </div>
     ` : `
     <div class="seo-content">
       <p>🏰 <strong>Status:</strong> Belum ada pemilik virtual. Jadilah pemilik pertama!</p>
       <p>🪙 <strong>Harga Virtual:</strong> ${fmtPrice((h.stars || 5) * 2000)} TrivCoin</p>
-      <p>🎮 Beli hotel ini di <a href="/hotels/">MyTriv Virtual Hotel Monopoly</a> — game dadu keliling 190+ negara dengan integrasi Wikipedia & kuis trivia.</p>
-      <button onclick="openBuyHotelModal()" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-weight:700;cursor:pointer;margin-top:8px;">🛒 Beli Hotel Virtual Ini</button>
+      <p>🗺️ Klaim hotel ini di <a href="/hotels/">MyTriv Virtual Hotel</a> — jelajahi AI Map Explorer di 190+ negara, kumpulkan poin dari aktivitas, dan miliki virtual hotel impianmu.</p>
+      <button onclick="openBuyHotelModal()" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-weight:700;cursor:pointer;margin-top:8px;">🛒 Klaim Hotel Virtual Ini</button>
     </div>
     `}
   </section>
@@ -1511,8 +1511,8 @@ const body = `
   <!-- 16. INTERNAL LINKS -->
   <!-- ═══ SECTION 10: MILIKI VIRTUAL ═══ -->
   <section class="seo-section monopoly-sec">
-    <h2>🎮 Miliki ${esc(h.name)} Secara Virtual — MyTriv Monopoly</h2>
-    <p><strong>${esc(h.name)}</strong> juga tersedia sebagai <strong>aset Virtual Monopoly</strong> — satu-satunya platform di dunia yang menggabungkan booking hotel dengan kepemilikan aset digital. Pengguna dapat membeli hak kepemilikan virtual hotel ini menggunakan <strong>TrivCoin</strong>.</p>
+    <h2>🎮 Miliki ${esc(h.name)} Secara Virtual — Virtual Hotel MyTriv</h2>
+    <p><strong>${esc(h.name)}</strong> juga tersedia sebagai <strong>aset virtual hotel</strong> — platform yang menggabungkan booking hotel dengan kepemilikan aset digital. Pengguna aktif yang rajin menjelajahi AI Map Explorer mengumpulkan poin untuk mengklaim &amp; memiliki virtual hotel ini, lalu mengelolanya menggunakan <strong>TrivCoin</strong>.</p>
     <p>Pemilik virtual memperoleh identitas sebagai <strong>Virtual Owner</strong> dan dapat memperjualbelikan kepemilikannya melalui <strong>Marketplace MyTriv</strong>. Semakin terkenal hotel, semakin tinggi minat komunitas terhadap kepemilikannya. Ini adalah aset digital koleksi dalam ekosistem MyTriv — bukan kepemilikan hotel di dunia nyata.</p>
   </section>
 
@@ -1715,7 +1715,7 @@ const body = `
     </div>
   </section>
 
-  <!-- ═══ ENHANCED MONOPOLY STATS ═══ -->
+  <!-- ═══ ENHANCED VIRTUAL HOTEL STATS ═══ -->
   <section class="seo-section monopoly-sec">
     <h2>📊 Statistik Virtual ${esc(h.name)}</h2>
     <div class="vm-stats-grid">
@@ -1742,7 +1742,7 @@ const body = `
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:14px;">
       <div class="hd-article-card"><h4>📖 Panduan Booking Hotel</h4><p>Cara membandingkan harga 8 OTA sekaligus dan langsung ke mitra. Gratis tanpa biaya tambahan.</p><a class="mini-cta" href="/book/" style="display:inline-block;margin-top:8px;">Baca →</a></div>
-      <div class="hd-article-card"><h4>🎲 Virtual Hotel Monopoly</h4><p>Belajar memiliki aset virtual hotel, trading di marketplace, dan kumpulkan keuntungan TrivCoin.</p><a class="mini-cta" href="/hotels/about.html" style="display:inline-block;margin-top:8px;">Pelajari →</a></div>
+      <div class="hd-article-card"><h4>🏨 Virtual Hotel</h4><p>Belajar memiliki aset virtual hotel, trading di marketplace, dan kumpulkan keuntungan TrivCoin.</p><a class="mini-cta" href="/hotels/about.html" style="display:inline-block;margin-top:8px;">Pelajari →</a></div>
       <div class="hd-article-card"><h4>🪙 TrivCoin Rewards</h4><p>Kumpulkan TrivCoin di setiap aktivitas dan redeem untuk keuntungan di ekosistem MyTriv.</p><a class="mini-cta" href="/hotels/" style="display:inline-block;margin-top:8px;">Dapatkan →</a></div>
     </div>
   </section>
@@ -1757,7 +1757,7 @@ const body = `
       ${cityPath ? `<a href="${cityPath}" class="seo-link">📍 Hotel di ${esc(h.city_name || h.city)}</a>` : ''}
       <a href="/hotels/" class="seo-link">🌍 Semua Hotel — 190+ Negara</a>
       <a href="/book/" class="seo-link">📖 MyTriv Book — Booking Cepat</a>
-      <a href="/hotels/about.html" class="seo-link">🎲 Panduan Monopoly</a>
+      <a href="/hotels/about.html" class="seo-link">🏨 Panduan Virtual Hotel</a>
     </div>
   </section>
 
@@ -1867,7 +1867,7 @@ const body = `
   window.hdCompare=function(){var el=document.getElementById('hd-book');if(el){el.scrollIntoView({behavior:'smooth'});var btn=document.querySelector('.hd-ota');if(btn)btn.style.outline='2px solid var(--cy)';}};
   window.hdPickDate=function(field,which){var d=new Date();if(which==='checkout')d.setDate(d.getDate()+1);var iso=d.toISOString().slice(0,10);var label=d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});document.getElementById(which==='checkin'?'hd-in':'hd-out').textContent=label;};
   window.hdPickGuests=function(field){field.querySelector('b').textContent='2 Tamu · 1 Kamar';};
-  window.openBuyHotelModal=function(){var el=document.getElementById('hd-book');if(el)el.scrollIntoView({behavior:'smooth'});else alert('Kunjungi /hotels/ untuk membeli hotel virtual di MyTriv Monopoly.');};
+  window.openBuyHotelModal=function(){var el=document.getElementById('hd-book');if(el)el.scrollIntoView({behavior:'smooth'});else alert('Kunjungi /hotels/ untuk mengklaim & mengelola virtual hotel MyTriv.');};
   window.hdReport=function(){alert('Terima kasih atas laporan Anda. Tim MyTriv akan meninjau informasi ini.');};
   window.hdSaveTrip=function(id){var b=document.getElementById(id);var on=b.classList.toggle('active');b.innerHTML=on?'💾 Tersimpan':'💾 Save Trip';};
 
@@ -2163,20 +2163,20 @@ const body = `
   ${priceHistorySectionHtml(h, 'en')}
 
   <section class="seo-section">
-    <h2>🎲 Virtual Hotel Monopoly — ${esc(h.name)}</h2>
+    <h2>🏨 Virtual Hotel — ${esc(h.name)}</h2>
     ${h.owner_name ? `
     <div class="seo-content">
       <p><strong>👑 Virtual Owner:</strong> ${esc(h.owner_name)}</p>
       <p><strong>💰 Purchase Price:</strong> ${fmtPrice(h.purchase_price || 10000)} TrivCoin</p>
       <p><strong>🏪 Marketplace Status:</strong> ${h.is_for_sale ? '🟢 For Sale (' + fmtPrice(h.sale_price || 0) + ' TrivCoin)' : '🔴 Not For Sale'}</p>
-      <p>This hotel is virtually owned in the <a href="/hotels/">MyTriv Virtual Hotel Monopoly</a> game. Owners can edit the page, add promos, and earn reward points.</p>
+      <p>This hotel is virtually owned on <a href="/hotels/">MyTriv Virtual Hotel</a>. Explore the AI Map Explorer to earn points, then claim &amp; manage this virtual hotel — edit the page, add promos, and earn reward points.</p>
     </div>
     ` : `
     <div class="seo-content">
       <p>🏰 <strong>Status:</strong> No virtual owner yet. Be the first!</p>
       <p>🪙 <strong>Virtual Price:</strong> ${fmtPrice((h.stars || 5) * 2000)} TrivCoin</p>
-      <p>🎮 Buy this hotel in <a href="/hotels/">MyTriv Virtual Hotel Monopoly</a> — a dice game across 190+ countries with Wikipedia & trivia integration.</p>
-      <button onclick="openBuyHotelModal()" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-weight:700;cursor:pointer;margin-top:8px;">🛒 Buy This Virtual Hotel</button>
+      <p>🗺️ Claim this hotel on <a href="/hotels/">MyTriv Virtual Hotel</a> — explore the AI Map Explorer across 190+ countries, earn points from activity, and own your dream virtual hotel.</p>
+      <button onclick="openBuyHotelModal()" style="background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-weight:700;cursor:pointer;margin-top:8px;">🛒 Claim This Virtual Hotel</button>
     </div>
     `}
   </section>
@@ -2192,8 +2192,8 @@ const body = `
   </section>
 
   <section class="seo-section monopoly-sec">
-    <h2>🎮 Own ${esc(h.name)} Virtually — MyTriv Monopoly</h2>
-    <p><strong>${esc(h.name)}</strong> is also available as a <strong>Virtual Monopoly asset</strong> — one of the few platforms in the world combining hotel booking with digital asset ownership. Users can buy the virtual ownership rights using <strong>TrivCoin</strong>.</p>
+    <h2>🎮 Own ${esc(h.name)} Virtually — MyTriv Virtual Hotel</h2>
+    <p><strong>${esc(h.name)}</strong> is also available as a <strong>virtual hotel asset</strong> — a platform combining hotel booking with digital asset ownership. Active users who explore the AI Map Explorer earn points to claim &amp; own this virtual hotel, then manage it using <strong>TrivCoin</strong>.</p>
     <p>Virtual owners get an identity as a <strong>Virtual Owner</strong> and can trade their ownership through the <strong>MyTriv Marketplace</strong>. This is a collectible digital asset within the MyTriv ecosystem — not real-world hotel ownership.</p>
   </section>
 
@@ -2478,10 +2478,19 @@ const body = `
       <div class="lp-benefit"><div class="lp-b-ic">🌏</div><div><b>Lengkap</b><p>270.000+ hotel di 190+ negara siap dibandingkan.</p></div></div>
     </div>
 
-    <div class="lp-monopoly">
-      <div class="lp-m-ic">🎲</div>
-      <div><b>MyTriv Virtual Hotel Monopoly</b><p>Mainkan monopoli virtual global — beli hotel, bangun properti, dan bersaing di leaderboard!</p></div>
-      <a href="/hotels/" target="_blank" rel="noopener">Mainkan Game →</a>
+    <div class="lp-sec-title" style="margin-top:44px"><span>🗺️</span><h2>Jelajahi AI Map Explorer &amp; Miliki Virtual Hotel</h2></div>
+    <div class="lp-sec-sub">Peta interaktif bertenaga AI — setiap eksplorasi di MyTriv memberi poin untuk memiliki virtual hotel</div>
+    <div class="lp-benefits" style="margin-top:4px">
+      <div class="lp-benefit"><div class="lp-b-ic">🤖</div><div><b>AI Map Explorer</b><p>Peta cerdas menyarankan restoran, kafe, atraksi &amp; transportasi terbaik di sekitar hotelmu.</p></div></div>
+      <div class="lp-benefit"><div class="lp-b-ic">🎯</div><div><b>Rekomendasi Personal</b><p>AI belajar preferensimu dan memberi saran hotel &amp; tempat wisata yang paling cocok.</p></div></div>
+      <div class="lp-benefit"><div class="lp-b-ic">🏨</div><div><b>Virtual Hotel Milikmu</b><p>Hotel virtual bisa dimiliki siapa pun yang aktif — jelajahi peta, kumpulkan poin, klaim &amp; kelola asetmu.</p></div></div>
+      <div class="lp-benefit"><div class="lp-b-ic">✨</div><div><b>Poin di Setiap Kunjungan</b><p>Makin sering kamu jelajahi MyTriv, makin banyak poin — alasan untuk terus kembali!</p></div></div>
+    </div>
+
+    <div class="lp-feature-band">
+      <div class="lp-f-ic">🗺️</div>
+      <div><b>AI Map Explorer MyTriv</b><p>Jelajahi peta interaktif global dengan bantuan AI — kumpulkan poin dan klaim virtual hotel untuk dimiliki!</p></div>
+      <a href="/maps/" target="_blank" rel="noopener">Buka Peta →</a>
     </div>
 
     <div class="lp-cta-band">
