@@ -323,7 +323,7 @@ function shell({ title, desc, canonical, ogImage, body, schema, lang = 'id', use
     lang_en: '🇬🇧 EN', lang_id: '🇮🇩 ID'
   };
   return `<!DOCTYPE html>
-<html lang="${lang}">
+<html lang="${lang}" class="mytriv-v2">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
@@ -731,10 +731,10 @@ footer a{color:var(--cy)}
 .hd-main .seo-content p{line-height:1.75;color:var(--txt)}
 @media(max-width:640px){.hd-layout{gap:18px}.hd-sec,.hd-main .seo-section{padding:15px 16px}.hd-hero-info{padding:18px 16px}}
 @media(max-width:640px){
-  .hd-gallery-main img{min-height:140px!important;max-height:220px!important}
+  .hd-gallery-main img,.hd-gmain-v2{min-height:140px!important;max-height:220px!important}
   .hd-gallery-thumbs{grid-template-columns:repeat(4,1fr)!important}
-  .hd-gallery-thumbs img{height:56px!important}
-  .hd-gallery-thumbs img:nth-child(n+5){display:none!important}
+  .hd-gallery-thumbs img,.hd-gthumb-v2{height:56px!important}
+  .hd-gallery-thumbs img:nth-child(n+5),.hd-gthumb-v2:nth-child(n+5){display:none!important}
   .hd-hero-grid{gap:0}
   .hd-hero-info{padding:12px 14px}
   .hd-hero-info h1{font-size:18px;line-height:1.35}
@@ -1267,19 +1267,19 @@ const body = `
       <div class="hd-gallery">
         <div class="hd-gallery-main" id="hd-gmain">
           <div class="aspect-hero">
-            <img src="${ogImage}" alt="${esc(h.name)}" id="hd-gmain-img" onclick="hdLightbox(0)" fetchpriority="high">
+            <img src="${ogImage}" alt="${esc(h.name)}" id="hd-gmain-img" class="hd-gmain-v2" onclick="hdLightbox(0)" fetchpriority="high">
             <span class="hd-zoom-badge">🔍 Klik untuk perbesar</span>
           </div>
         </div>
         <div class="hd-gallery-thumbs" id="hd-gthumbs">
-          <img src="${hotelImage(h, 500)}&t=1" alt="${esc(h.name)} foto 2" onclick="hdSwap(this)" loading="lazy">
-          <img src="${hotelImage(h, 500)}&t=2" alt="${esc(h.name)} foto 3" onclick="hdSwap(this)" loading="lazy">
-          <img src="${hotelImage(h, 500)}&t=3" alt="${esc(h.name)} foto 4" onclick="hdSwap(this)" loading="lazy">
-          <img src="${hotelImage(h, 500)}&t=4" alt="${esc(h.name)} foto 5" onclick="hdSwap(this)" loading="lazy">
-          <img src="${hotelImage(h, 500)}&t=5" alt="${esc(h.name)} foto 6" onclick="hdSwap(this)" loading="lazy">
-          <img src="${hotelImage(h, 500)}&t=6" alt="${esc(h.name)} foto 7" onclick="hdSwap(this)" loading="lazy">
-          <img src="${hotelImage(h, 500)}&t=7" alt="${esc(h.name)} foto 8" onclick="hdSwap(this)" loading="lazy">
-          <img src="${hotelImage(h, 500)}&t=8" alt="${esc(h.name)} foto 9" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=1" alt="${esc(h.name)} foto 2" class="hd-gthumb-v2" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=2" alt="${esc(h.name)} foto 3" class="hd-gthumb-v2" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=3" alt="${esc(h.name)} foto 4" class="hd-gthumb-v2" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=4" alt="${esc(h.name)} foto 5" class="hd-gthumb-v2" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=5" alt="${esc(h.name)} foto 6" class="hd-gthumb-v2" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=6" alt="${esc(h.name)} foto 7" class="hd-gthumb-v2" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=7" alt="${esc(h.name)} foto 8" class="hd-gthumb-v2" onclick="hdSwap(this)" loading="lazy">
+          <img src="${hotelImage(h, 500)}&t=8" alt="${esc(h.name)} foto 9" class="hd-gthumb-v2" onclick="hdSwap(this)" loading="lazy">
         </div>
       </div>
       <div class="hd-hero-info">
@@ -1892,7 +1892,7 @@ const body = `
 </div>
 
 <!-- MOBILE STICKY BOOKING BAR -->
-<div class="hd-mobile-bar">
+<div class="hd-mobile-bar hd-mbar-v2">
   <div class="m-price"><b>${hasPrice ? price : 'Cek Harga'}</b><span>/ malam · ${starLevel}</span></div>
   <a class="m-cta" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking</a>
 </div>
