@@ -1249,6 +1249,31 @@ let TRAVELPAYOUTS_CONFIG = {
 // TRAVELPAYOUTS PARTNER LINKS API & LIVE BULK ENGINE
 // ==========================================
 
+// Helper: Fetch LIVE hotel price from TravelPayouts (Hotellook) once API is active.
+// Returns null (so callers keep using price_idr estimate) until valid token + USE_LIVE flag are set.
+async function fetchLivePrice({ hotelName, city, checkin, checkout, currency = 'IDR' }) {
+  if (!TRAVELPAYOUTS_CONFIG.use_live_prices || !TRAVELPAYOUTS_CONFIG.api_token) return null;
+  try {
+    // Hotellook Search API (partner Token). Keep endpoint in one place; adjust to your plan.
+    const url = new URL('https://search.hotellook.com/property_feed.json');
+    url.search = new URLSearchParams({
+      token: TRAVELPAYOUTS_CONFIG.api_token,
+      currency: currency.toLowerCase(),
+      checkin: checkin || '',
+      checkout: checkout || '',
+      hotelName: hotelName || '',
+      city: city || ''
+    }).toString();
+    const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const price = Number(data?.result?.price_from) || Number(data?.price_from) || (Array.isArray(data) ? Number(data[0]?.priceFrom) : 0);
+    return price > 0 ? Math.round(price) : null;
+  } catch (e) {
+    return null; // silent — never break the page
+  }
+}
+
 // Helper Function: Programmatic Travelpayouts Partner Link Generator
 // Helper Function: Programmatic Travelpayouts & Direct OTA Partner Link Generator
 // Country name to Booking.com country code mapping

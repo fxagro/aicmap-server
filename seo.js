@@ -1259,7 +1259,7 @@ const body = `
         <h1>${esc(h.name)} — Hotel ${starLevel} di ${esc(loc)}</h1>
         <div class="hd-addr">📍 ${esc(loc)}${h.address ? ' — ' + esc(h.address) : ''} · <a href="#hd-map-anchor" onclick="hdScrollMap(event)">Lihat di peta</a></div>
         <div class="hd-tags">${am.slice(0, 8).map(a => `<span class="hd-tag">✔ ${esc(a)}</span>`).join('')}</div>
-        ${hasPrice ? `<div class="hd-price-line">💵 <b>${price}</b> <span>/ malam · sudah termasuk pajak</span></div>` : ''}
+        ${hasPrice ? `<div class="hd-price-line">💵 <b>Mulai ${price}</b> <span>/ malam · estimasi referensi</span></div>` : ''}
         <div class="hd-ai-summary">
           <h4>🤖 AI Summary</h4>
           <ul>
@@ -1399,7 +1399,7 @@ const body = `
       ${similarHotels.length ? similarHotels.map(n => `<div class="hcard-mini">
         <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
         <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
-        <div class="price">${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/hotel/${n.slug}">Lihat & Booking</a></div>
+        <div class="price">Mulai ${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/hotel/${n.slug}">Lihat & Booking</a></div>
       </div>`).join('') : '<p style="color:var(--mut)">Data hotel serupa akan segera tersedia.</p>'}
     </div>
   </section>
@@ -1411,7 +1411,7 @@ const body = `
       ${nearby.filter(n => n.slug !== h.slug).slice(0, 8).map(n => `<div class="hcard-mini">
         <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
         <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
-        <div class="price">${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/hotel/${n.slug}">Lihat & Booking</a></div>
+        <div class="price">Mulai ${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/hotel/${n.slug}">Lihat & Booking</a></div>
       </div>`).join('') || '<p style="color:var(--mut)">Tambah data hotel di kota ini segera.</p>'}
     </div>
   </section>
@@ -1452,7 +1452,7 @@ const body = `
     <!-- SIDEBAR: BOOKING CARD -->
     <div class="hd-card hd-book-card" id="hd-book">
       <h3>🔵 Booking ${esc(h.name)}</h3>
-      ${hasPrice ? `<div class="hd-price-line"><b>${price}</b> <span>/ malam</span></div>` : ''}
+      ${hasPrice ? `<div class="hd-price-line"><b>Mulai ${price}</b> <span>/ malam · estimasi</span></div>` : ''}
       <div class="hd-field" onclick="hdPickDate(this,'checkin')"><span>🛎️ Check-in</span><b id="hd-in">+ Tambah Tanggal</b></div>
       <div class="hd-field" onclick="hdPickDate(this,'checkout')"><span>🧳 Check-out</span><b id="hd-out">+ Tambah Tanggal</b></div>
       <div class="hd-field" onclick="hdPickGuests(this)"><span>👥 Tamu</span><b id="hd-g">2 Tamu · 1 Kamar</b></div>
@@ -1591,7 +1591,7 @@ const body = `
       ${nearby.length ? nearby.slice(0, 4).map(n => `<a href="/hotel/${n.slug}" class="hcard-mini">
         <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
         <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
-        <div class="price">${fmtPrice(n.price_idr)}</div><span class="mini-cta">Lihat →</span></div>
+        <div class="price">Mulai ${fmtPrice(n.price_idr)}</div><span class="mini-cta">Lihat →</span></div>
       </a>`).join('') : '<p style="color:var(--mut)">Data hotel populer segera tersedia.</p>'}
     </div>
   </section>
@@ -2038,7 +2038,7 @@ const body = `
       <h1>${esc(h.name)} — ${starLevel} Hotel in ${esc(loc)}</h1>
       <div class="addr">📍 ${esc(loc)}${h.address ? ' — ' + esc(h.address) : ''}</div>
       <div class="tags">${am.map(a => `<span class="tag">${esc(a)}</span>`).join('')}</div>
-      ${hasPrice ? `<div class="price">💵 From <b>${price}</b> / night</div>` : ''}
+      ${hasPrice ? `<div class="price">💵 From <b>${price}</b> / night · estimated</div>` : ''}
       <div class="ctas">
         <a class="cta cta-primary" href="/go?u=${encodeURIComponent(links.booking)}&partner=booking&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🔵 Booking.com — Book Now</a>
         <a class="cta cta-alt" href="/go?u=${encodeURIComponent(links.agoda)}&partner=agoda&slug=${encodeURIComponent(slug)}&hotel=1" target="_blank" rel="nofollow noopener">🟠 Agoda — Check Price</a>
@@ -2135,7 +2135,7 @@ const body = `
       ${similarHotels.length ? similarHotels.map(n => `<div class="hcard-mini">
         <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
         <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
-        <div class="price">${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/en/hotel/${n.slug}">View & Book</a></div>
+        <div class="price">From ${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/en/hotel/${n.slug}">View & Book</a></div>
       </div>`).join('') : '<p style="color:var(--mut)">Similar hotel data coming soon.</p>'}
     </div>
   </section>
@@ -2146,7 +2146,7 @@ const body = `
       ${nearby.filter(n => n.slug !== h.slug).slice(0, 4).map(n => `<div class="hcard-mini">
         <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
         <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
-        <div class="price">${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/en/hotel/${n.slug}">View & Book</a></div>
+        <div class="price">From ${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/en/hotel/${n.slug}">View & Book</a></div>
       </div>`).join('') || '<p style="color:var(--mut)">More hotels in this city coming soon.</p>'}
     </div>
   </section>
@@ -2571,7 +2571,7 @@ const body = `
     ${hotels.rows.map(n => `<div class="hcard-mini">
       <img src="${hotelImage(n, 400)}" alt="${esc(n.name)}" loading="lazy" width="400" height="160">
       <div class="hmini-body"><h3>${esc(n.name)}</h3><div class="stars">${'★'.repeat(n.stars || 4)} · ${n.rating || 4.2}/5</div>
-      <div class="price">${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/hotel/${n.slug}">Lihat & Booking</a></div>
+      <div class="price">Mulai ${fmtPrice(n.price_idr)}</div><a class="mini-cta" href="/hotel/${n.slug}">Lihat & Booking</a></div>
     </div>`).join('')}
   </div>
   <h2>Tips wisata ${esc(c.name)}</h2>
@@ -2729,7 +2729,7 @@ function renderMarkers(filter){
     el.style.cssText='width:'+(filter==='all'?18:22)+'px;height:'+(filter==='all'?18:22)+'px;background:'+(h.stars>=4?'#f0c040':'#58a6ff')+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.6);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:bold';
     el.textContent=h.stars>=5?'5':h.stars>=4?'4':'';
     const m=new maplibregl.Marker({element:el}).setLngLat([h.lng,h.lat])
-      .setPopup(new maplibregl.Popup().setHTML('<h3>'+h.name+'</h3><div class=\\"stars\\">'+'★'.repeat(h.stars>=5?5:h.stars>=4?4:3)+' '+(h.rating||4)+'/5</div>'+(h.price?'<div>from Rp '+(h.price/1000000).toFixed(1)+' jt</div>':'')+'<a href=\\"/hotel/'+h.slug+'\\">Lihat Detail & Booking →</a>'))
+      .setPopup(new maplibregl.Popup().setHTML('<h3>'+h.name+'</h3><div class=\\"stars\\">'+'★'.repeat(h.stars>=5?5:h.stars>=4?4:3)+' '+(h.rating||4)+'/5</div>'+(h.price?'<div>Mulai dari Rp '+(h.price/1000000).toFixed(1)+' jt</div>':'')+'<a href=\\"/hotel/'+h.slug+'\\">Lihat Detail & Booking →</a>'))
       .addTo(map);
     markers.push(m);
   });
@@ -2753,7 +2753,7 @@ function searchHotel(q){
     el.style.cssText='width:26px;height:26px;background:#e04040;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.7);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;font-weight:bold';
     el.textContent=h.stars>=5?'5':h.stars>=4?'4':'';
     const m=new maplibregl.Marker({element:el}).setLngLat([h.lng,h.lat])
-      .setPopup(new maplibregl.Popup().setHTML('<h3>'+h.name+'</h3><div class=\\"stars\\">'+'★'.repeat(h.stars>=5?5:h.stars>=4?4:3)+' '+(h.rating||4)+'/5</div>'+(h.price?'<div>from Rp '+(h.price/1000000).toFixed(1)+' jt</div>':'')+'<a href=\\"/hotel/'+h.slug+'\\">Lihat Detail & Booking →</a>'))
+      .setPopup(new maplibregl.Popup().setHTML('<h3>'+h.name+'</h3><div class=\\"stars\\">'+'★'.repeat(h.stars>=5?5:h.stars>=4?4:3)+' '+(h.rating||4)+'/5</div>'+(h.price?'<div>Mulai dari Rp '+(h.price/1000000).toFixed(1)+' jt</div>':'')+'<a href=\\"/hotel/'+h.slug+'\\">Lihat Detail & Booking →</a>'))
       .addTo(map);
     markers.push(m);
   });
