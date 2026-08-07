@@ -2683,7 +2683,7 @@ loadReviews('pending');
    #sidebar{pointer-events:auto}
 </style>
 <div id="map"></div>
-<a href="/maps/" style="position:fixed;top:14px;left:340px;z-index:2000;background:rgba(13,17,23,.95);color:#c9d1d9;border:1px solid #30363d;border-radius:8px;padding:8px 14px;font-size:13px;text-decoration:none;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.5);" onmouseover="this.style.color='#58a6ff';this.style.borderColor='#58a6ff'" onmouseout="this.style.color='#c9d1d9';this.style.borderColor='#30363d'">← Kembali ke Hotel</a>
+<a href="/maps/" onclick="if(window.history.length>1&&document.referrer&&document.referrer.indexOf(location.origin)===0){event.preventDefault();event.stopPropagation();history.back();}" style="position:fixed;top:14px;left:340px;z-index:2000;background:rgba(13,17,23,.95);color:#c9d1d9;border:1px solid #30363d;border-radius:8px;padding:8px 14px;font-size:13px;text-decoration:none;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.5);" onmouseover="this.style.color='#58a6ff';this.style.borderColor='#58a6ff'" onmouseout="this.style.color='#c9d1d9';this.style.borderColor='#30363d'">← Kembali ke Hotel</a>
 <div id="sidebar">
   <h1>🏨 Hotel di ${esc(city)}</h1>
   <div class="sub">${hotels.length} hotel — MyTriv Maps Explorer</div>
