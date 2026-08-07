@@ -94,6 +94,8 @@ function fmtPrice(idr) {
 }
 
 function hotelImage(h, w = 800) {
+  // Prioritas: foto ASLI dari Wikimedia (photo_main) > image legacy > pool stok
+  if (h.photo_main) return h.photo_main;
   if (h.image) return h.image;
   return hotelImgUrl((h.city || h.city_name || '') + '|' + (h.country || h.country_name || ''));
 }
