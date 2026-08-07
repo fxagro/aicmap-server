@@ -754,6 +754,14 @@ footer a{color:var(--cy)}
 .hd-chat-in input:focus{border-color:var(--cy)}
 .hd-chat-in button{background:linear-gradient(135deg,#00F0FF,#2563EB);border:none;color:#060B13;font-weight:800;border-radius:99px;padding:0 16px;cursor:pointer;font-size:13px}
 .hd-chat-typing{color:var(--mut);font-size:12px;padding:2px 4px}
+@media(max-width:640px){
+  .hd-chat-fab{right:14px;bottom:64px;width:54px;height:54px}
+  .hd-chat-bubble{left:12px;right:12px;width:auto;bottom:78px;max-height:calc(100dvh - 96px)}
+  .hd-chat-body{min-height:0}
+  .hd-chat-msg{max-width:92%}
+  .hd-chat-in input{font-size:16px}
+  .hd-chat-head{padding:10px 12px}
+}
 </style>
 </head>
 <body>
@@ -2681,6 +2689,7 @@ loadReviews('pending');
    .hd-chat-fab,.hd-chat-bubble{z-index:2500}
    .hd-chat-bubble{right:18px;bottom:150px}
    .hd-chat-body{max-height:min(380px,50vh)}
+   @media(max-width:640px){.hd-chat-bubble{left:12px;right:12px;width:auto;bottom:70px;max-height:calc(100dvh - 88px)}.hd-chat-body{max-height:none;min-height:0}}
    #map{position:fixed;inset:0}
    #sidebar{pointer-events:auto}
 </style>
