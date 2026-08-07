@@ -914,6 +914,9 @@ module.exports = function createSeoRouter({ pool, generatePartnerLink }) {
       const parts = [];
       for (let i = 1; i <= pages; i++) parts.push(SITE + '/sitemap/hotels/id/' + i);
       for (let i = 1; i <= pages; i++) parts.push(SITE + '/sitemap/hotels/en/' + i);
+      // New sub-sitemaps: core pages + /maps/{city} pages
+      parts.push(SITE + '/hotels/feeds/core_pages.xml');
+      parts.push(SITE + '/hotels/feeds/maps_city_001.xml');
       res.set('Content-Type', 'application/xml');
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
