@@ -920,9 +920,9 @@ module.exports = function createSeoRouter({ pool, generatePartnerLink }) {
       res.set('Content-Type', 'application/xml');
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-<url><loc>${SITE}/sitemap/countries.xml</loc></url>
-<url><loc>${SITE}/sitemap/cities.xml</loc></url>
-${parts.map(u => `<url><loc>${u}</loc></url>`).join('\n')}
+<sitemap><loc>${SITE}/sitemap/countries.xml</loc></sitemap>
+<sitemap><loc>${SITE}/sitemap/cities.xml</loc></sitemap>
+${parts.map(u => `<sitemap><loc>${u}</loc></sitemap>`).join('\n')}
 </sitemapindex>`);
     } catch (e) { console.error('sitemap index error:', e.message); res.status(500).send('sitemap error'); }
   });
