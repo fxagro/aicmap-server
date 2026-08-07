@@ -326,7 +326,10 @@ function shell({ title, desc, canonical, ogImage, body, schema, lang = 'id', use
 <html lang="${lang}">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>${title}</title>
 <meta name="description" content="${desc}">
 <link rel="canonical" href="${canonical}">
@@ -728,24 +731,28 @@ footer a{color:var(--cy)}
 .hd-main .seo-content p{line-height:1.75;color:var(--txt)}
 @media(max-width:640px){.hd-layout{gap:18px}.hd-sec,.hd-main .seo-section{padding:15px 16px}.hd-hero-info{padding:18px 16px}}
 @media(max-width:640px){
-  .hd-gallery-main img{min-height:180px!important;max-height:280px!important}
-  .hd-gallery-thumbs img{height:64px!important}
+  .hd-gallery-main img{min-height:140px!important;max-height:220px!important}
+  .hd-gallery-thumbs{grid-template-columns:repeat(4,1fr)!important}
+  .hd-gallery-thumbs img{height:56px!important}
   .hd-gallery-thumbs img:nth-child(n+5){display:none!important}
   .hd-hero-grid{gap:0}
-  .hd-hero-info{padding:14px 16px}
-  .hd-hero-info h1{font-size:20px}
-  .hd-hero-info .hd-rating-chip{font-size:12px}
-  .hd-hero-info .stars{font-size:13px}
-  .hd-price-line b{font-size:18px}
-  .hd-layout{gap:12px}
-  .hd-sec,.hd-main .seo-section{padding:12px 14px}
+  .hd-hero-info{padding:12px 14px}
+  .hd-hero-info h1{font-size:18px;line-height:1.35}
+  .hd-hero-info .hd-rating-chip{font-size:11px}
+  .hd-hero-info .stars{font-size:12px}
+  .hd-price-line{padding:8px 10px}
+  .hd-price-line b{font-size:16px}
+  .hd-layout{gap:10px}
+  .hd-sec,.hd-main .seo-section{padding:10px 12px}
   .hd-book-card{position:static!important}
-  .hd-page{padding-bottom:80px}
-  header{padding:10px 14px}
-  header .logo{font-size:16px}
-  nav a{margin-left:10px;font-size:12px}
-  .hd-mobile-bar{padding:10px 14px}
-  .hd-mobile-bar .m-cta{padding:10px 18px;font-size:13px}
+  .hd-page{padding-bottom:68px}
+  header{padding:8px 12px}
+  header .logo{font-size:15px}
+  nav a{margin-left:8px;font-size:11px}
+  .hd-mobile-bar{padding:8px 12px;min-height:52px}
+  .hd-mobile-bar .m-price b{font-size:16px}
+  .hd-mobile-bar .m-cta{padding:9px 16px;font-size:12px}
+  .crumbs{font-size:12px;padding:10px 12px}
 }
 
 
