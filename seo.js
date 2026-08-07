@@ -2683,11 +2683,12 @@ loadReviews('pending');
    #sidebar{pointer-events:auto}
 </style>
 <div id="map"></div>
+<a href="/maps/" style="position:fixed;top:14px;left:340px;z-index:2000;background:rgba(13,17,23,.95);color:#c9d1d9;border:1px solid #30363d;border-radius:8px;padding:8px 14px;font-size:13px;text-decoration:none;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.5);" onmouseover="this.style.color='#58a6ff';this.style.borderColor='#58a6ff'" onmouseout="this.style.color='#c9d1d9';this.style.borderColor='#30363d'">← Kembali ke Hotel</a>
 <div id="sidebar">
   <h1>🏨 Hotel di ${esc(city)}</h1>
   <div class="sub">${hotels.length} hotel — MyTriv Maps Explorer</div>
   <div class="stats">
-    <div class="stat">⭐ <b>${(hotels.reduce((s,h)=>s+(h.rating||4),0)/hotels.length).toFixed(1)}</b> avg rating</div>
+    <div class="stat">⭐ <b>${hotels.length>0?(hotels.reduce((s,h)=>s+(Number(h.rating)||4),0)/hotels.length).toFixed(1):'-'}</b> avg rating</div>
     <div class="stat">💰 <b>${hotels.filter(h=>h.price_idr<800000).length}</b> budget</div>
     <div class="stat">🌟 <b>${hotels.filter(h=>(h.stars||4)>=4).length}</b> premium</div>
   </div>
@@ -2764,7 +2765,7 @@ renderMarkers('all');
   var COUNT=${hotels.length};
   var BUDGET=${hotels.filter(h=>h.price_idr<800000).length};
   var PREM=${hotels.filter(h=>(h.stars||4)>=4).length};
-  var AVG=${(hotels.reduce((s,h)=>s+(h.rating||4),0)/hotels.length).toFixed(1)};
+  var AVG=${hotels.length>0?(hotels.reduce((s,h)=>s+(Number(h.rating)||4),0)/hotels.length).toFixed(1):0};
   var CHIPS=['hotel','budget','premium','wisata','itinerary','transport','booking'];
   function chatGen(msg){
     var t=msg.toLowerCase();
