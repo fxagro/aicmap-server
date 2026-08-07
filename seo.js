@@ -727,6 +727,21 @@ footer a{color:var(--cy)}
 .hd-main .seo-section>h2{font-size:19px}
 .hd-main .seo-content p{line-height:1.75;color:var(--txt)}
 @media(max-width:640px){.hd-layout{gap:18px}.hd-sec,.hd-main .seo-section{padding:15px 16px}.hd-hero-info{padding:18px 16px}}
+@media(max-width:640px){
+  .hd-gallery-main img{min-height:180px;max-height:280px}
+  .hd-gallery-thumbs img{height:64px}
+  .hd-gallery-thumbs img:nth-child(n+5){display:none}
+  .hd-hero-grid{gap:0}
+  .hd-hero-info{padding:14px 16px}
+  .hd-hero-info h1{font-size:20px}
+  .hd-hero-info .hd-rating-chip{font-size:12px}
+  .hd-hero-info .stars{font-size:13px}
+  .hd-price-line b{font-size:18px}
+  .hd-layout{gap:12px}
+  .hd-sec,.hd-main .seo-section{padding:12px 14px}
+  .hd-book-card{position:static!important}
+}
+
 
 /* ── Floating AI Chat Assistant ── */
 .hd-chat-fab{position:fixed;right:18px;bottom:78px;z-index:120;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#00F0FF,#2563EB);border:none;color:#060B13;font-size:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px rgba(0,240,255,.35);transition:transform .2s}
