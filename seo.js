@@ -58,13 +58,28 @@ function hotelImgUrl(seedKey) {
 
 function slugify(s) {
   if (!s) return '';
-  let t = '';
-  for (const ch of String(s).toLowerCase().replace(/&/g, ' and ').replace(/'/g, '')) {
-    if (/[a-z0-9]/.test(ch)) t += ch;
-    else if (' -_'.includes(ch)) t += '-';
+  // Normalize accents (e.g. São Paulo -> sao-paulo, München -> munchen, ã -> a)
+  const accentMap = {
+    'ã':'a','â':'a','á':'a','à':'a','ä':'a','å':'a','ą':'a',
+    'é':'e','ê':'e','è':'e','ë':'e','ę':'e',
+    'í':'i','î':'i','ì':'i','ï':'i',
+    'ó':'o','ô':'o','ò':'o','ö':'o','õ':'o','ø':'o','õ':'o',
+    'ú':'u','û':'u','ù':'u','ü':'u',
+    'ñ':'n','ç':'c','ć':'c','č':'c','ď':'d','ğ':'g','š':'s','ş':'s','ß':'ss','ž':'z','ý':'y'
+  };
+  let t = String(s).toLowerCase().replace(/&/g, ' and ').replace(/'/g, '');
+  let out = '';
+  for (const ch of t) {
+    out += accentMap[ch] !== undefined ? accentMap[ch] : ch;
   }
-  while (t.includes('--')) t = t.replace('--', '-');
-  return t.replace(/^-+|-+$/g, '').slice(0, 120);
+  t = out;
+  let result = '';
+  for (const ch of t) {
+    if (/[a-z0-9]/.test(ch)) result += ch;
+    else if (' -_'.includes(ch)) result += '-';
+  }
+  while (result.includes('--')) result = result.replace('--', '-');
+  return result.replace(/^-+|-+$/g, '').slice(0, 120);
 }
 
 function sanStars(s) { const n = Number(s); if (!Number.isFinite(n) || n < 1) return 4; return Math.min(5, Math.max(1, Math.round(n))); }
@@ -2614,16 +2629,19 @@ loadReviews('pending');
   // ============ MAP EXPLORER ============
   router.get('/maps/:city', async (req, res) => {
     try {
-      const city = req.params.city.replace(/-/g,' ').replace(/bandung/,'Bandung').replace(/jakarta/,'Jakarta').replace(/yogyakarta/,'Yogyakarta').replace(/bali/,'Bali');
-      const lang = city === req.params.city ? 'id' : 'id'; // keep simple
+      const lang = 'id'; // keep simple
       const cRes = await pool.query(
-        "SELECT id, name, slug, city, lat, lng, stars, rating, price_idr, image FROM hotels WHERE LOWER(city)=LOWER($1) AND lat IS NOT NULL AND lng IS NOT NULL AND country='Indonesia' ORDER BY rating DESC NULLS LAST LIMIT 500",
-        [city]
+        "SELECT id, name, slug, city, country, lat, lng, stars, rating, price_idr, image FROM hotels WHERE city_slug=$1 AND lat IS NOT NULL AND lng IS NOT NULL ORDER BY rating DESC NULLS LAST LIMIT 500",
+        [req.params.city]
       );
       if (!cRes.rows.length) {
         return res.status(404).send(shell({ title: 'City Not Found', desc: 'No hotels found for this city', canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: '<p>City not found</p>' }));
       }
       const hotels = cRes.rows;
+      const cityName = hotels[0].city || req.params.city;
+      const countryName = hotels[0].country || '';
+      const titleCity = String(cityName).replace(/(^|\s)(\S)/g, (m, sp, ch) => sp + ch.toUpperCase());
+      const city = titleCity;
       const avgLat = hotels.reduce((s,h) => s + Number(h.lat), 0) / hotels.length;
       const avgLng = hotels.reduce((s,h) => s + Number(h.lng), 0) / hotels.length;
       
@@ -2632,8 +2650,8 @@ loadReviews('pending');
         stars: h.stars || 4, rating: h.rating, price: h.price_idr
       })));
       
-      const title = `Peta Interaktif Hotel di ${city.charAt(0).toUpperCase()+city.slice(1)} — MyTriv Maps`;
-      const desc = `Jelajahi ${hotels.length} hotel di ${city} dengan peta interaktif. Filter berdasarkan rating, harga, dan kategori. Bandingkan harga Booking.com, Agoda, Traveloka.`;
+      const title = `Peta Interaktif Hotel di ${titleCity} — MyTriv Maps`;
+      const desc = `Jelajahi ${hotels.length} hotel di ${titleCity}${countryName ? ', ' + countryName : ''} dengan peta interaktif. Filter berdasarkan rating, harga, dan kategori. Bandingkan harga Booking.com, Agoda, Traveloka.`;
       
       const mapHtml = `
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
@@ -2766,6 +2784,7 @@ renderMarkers('all');
 </script>`;
       res.send(shell({ title, desc, canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: mapHtml }));
     } catch (e) {
+      console.error('MAPS ERROR for', req.params.city + ':', e.message, e.stack ? e.stack.split('\n')[1] : '');
       res.status(500).send(shell({ title: 'Error', desc: 'Server error', canonical: SITE + '/maps/' + req.params.city, ogImage: hotelImage({}, 800), body: '<p>Error loading map</p>' }));
     }
   });
