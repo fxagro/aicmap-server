@@ -1249,31 +1249,6 @@ let TRAVELPAYOUTS_CONFIG = {
 // TRAVELPAYOUTS PARTNER LINKS API & LIVE BULK ENGINE
 // ==========================================
 
-// Helper: Fetch LIVE hotel price from TravelPayouts (Hotellook) once API is active.
-// Returns null (so callers keep using price_idr estimate) until valid token + USE_LIVE flag are set.
-async function fetchLivePrice({ hotelName, city, checkin, checkout, currency = 'IDR' }) {
-  if (!TRAVELPAYOUTS_CONFIG.use_live_prices || !TRAVELPAYOUTS_CONFIG.api_token) return null;
-  try {
-    // Hotellook Search API (partner Token). Keep endpoint in one place; adjust to your plan.
-    const url = new URL('https://search.hotellook.com/property_feed.json');
-    url.search = new URLSearchParams({
-      token: TRAVELPAYOUTS_CONFIG.api_token,
-      currency: currency.toLowerCase(),
-      checkin: checkin || '',
-      checkout: checkout || '',
-      hotelName: hotelName || '',
-      city: city || ''
-    }).toString();
-    const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const price = Number(data?.result?.price_from) || Number(data?.price_from) || (Array.isArray(data) ? Number(data[0]?.priceFrom) : 0);
-    return price > 0 ? Math.round(price) : null;
-  } catch (e) {
-    return null; // silent — never break the page
-  }
-}
-
 // Helper Function: Programmatic Travelpayouts Partner Link Generator
 // Helper Function: Programmatic Travelpayouts & Direct OTA Partner Link Generator
 // Country name to Booking.com country code mapping
@@ -1754,6 +1729,172 @@ app.get('/api/flights/search', (req, res) => {
   }
 });
 
+// ==========================================
+// AVISALES DATA API — CHEAPEST FLIGHTS (static, cached 6h)
+// Uses X-Access-Token header. Data = cache of Aviasales user searches (~7 days).
+// Good for "Tiket Termurah" panels on /book + city pages. Deep-links out to Aviasales.
+// ==========================================
+const AVIA_TOKEN = process.env.AVIASALES_TOKEN || 'c0eb0df20489742b4d8edeb8987cdee1';
+const AVIA_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+
+function aviaCachePath(origin, destination) {
+  const safe = `${origin || 'any'}_${destination || 'any'}`.toLowerCase();
+  return `/tmp/aviasales_deals_${safe}.json`;
+}
+
+function readAviaCache(path) {
+  try {
+    if (fs.existsSync(path)) {
+      const el = JSON.parse(fs.readFileSync(path, 'utf8'));
+      if (el.fetched_at && Date.now() - el.fetched_at < AVIA_CACHE_TTL_MS) return el.deals;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function writeAviaCache(path, deals) {
+  try {
+    fs.writeFileSync(path, JSON.stringify({ fetched_at: Date.now(), deals }), 'utf8');
+  } catch (e) {}
+}
+
+function formatIdr(value) { return value == null ? null : Math.round(Number(value)); }
+
+// GET Cheap flight deals (Aviasales Data API). Optional destination; one-way cache.
+app.get('/api/flights/deals', async (req, res) => {
+  try {
+    const { origin = 'CGK', destination = '', currency = 'idr', limit = 18, period_type = 'month', refresh = '' } = req.query;
+    const originIata = String(origin).toUpperCase().slice(0, 3);
+    const destIata = destination ? String(destination).toUpperCase().slice(0, 3) : '';
+
+    const cachePath = aviaCachePath(originIata, destIata || 'all');
+    const cached = readAviaCache(cachePath);
+    if (cached && !(refresh === '1' || refresh === 'true')) {
+      return res.json({ status: 'ok', source: 'cache', origin: originIata, destination: destIata, currency, total: cached.length, deals: cached });
+    }
+
+    const params = new URLSearchParams({
+      origin: originIata,
+      currency: currency,
+      sorting: 'price',
+      limit: String(parseInt(limit) || 18)
+    });
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const localYmd = y => `${y.getFullYear()}-${pad(y.getMonth() + 1)}-${pad(y.getDate())}`;
+    if (period_type === 'day') {
+      params.set('period_type', 'day');
+      params.set('beginning_of_period', localYmd(now));
+    } else {
+      params.set('period_type', 'month');
+      params.set('beginning_of_period', localYmd(new Date(now.getFullYear(), now.getMonth(), 1)));
+    }
+    if (destIata) params.set('destination', destIata);
+
+    const url = `https://api.travelpayouts.com/aviasales/v3/get_latest_prices?${params.toString()}`;
+    const resp = await fetch(url, { headers: { 'X-Access-Token': AVIA_TOKEN } });
+    if (!resp.ok) {
+      return res.status(502).json({ status: 'error', code: resp.status, message: 'Aviasales API error', source: 'api' });
+    }
+    const json = await resp.json();
+    const rawDeals = (json && json.data) || [];
+    const marker = TRAVELPAYOUTS_CONFIG.marker_id;
+
+    const deals = rawDeals.slice(0, parseInt(limit, 10) || 18).map(d => {
+      // Build Aviasales deep search token: {O}{DD}{MM}{dest}{pax} (e.g. CGK1208DPS1)
+      const ddStr = String(d.depart_date || '').slice(0, 10); // YYYY-MM-DD
+      const flightToken = `${d.origin || originIata}${ddStr.slice(8, 10)}${ddStr.slice(5, 7)}${d.destination || destIata || 'X'}1`;
+      // Deep-link ke white-label sendiri (brand MyTriv) dengan token Aviasales:
+      // us.mytriv.com/?flightSearch={O}{DDMM}{dest}{pax}&origin_iata=...&destination_iata=...&depart_date=...
+      const originCode = d.origin || originIata;
+      const destCode = d.destination || destIata || 'X';
+      const wlParams = new URLSearchParams({
+        origin_iata: originCode,
+        destination_iata: destCode,
+        depart_date: ddStr,
+        adults: '1',
+        locale: 'id'
+      });
+      return {
+        origin: d.origin, destination: d.destination,
+        depart_date: d.depart_date, return_date: d.return_date || '',
+        price: formatIdr(d.value), currency: json.currency || currency,
+        number_of_changes: d.number_of_changes ?? 0,
+        airline: d.airline || null, flight_number: d.flight_number || null,
+        duration: d.duration || null,
+        platform: d.gate || 'Aviasales',
+        deep_link: `https://us.mytriv.com/?flightSearch=${flightToken}&${wlParams.toString()}`
+      };
+    });
+
+    writeAviaCache(cachePath, deals);
+    res.json({ status: 'ok', source: 'live', origin: originIata, destination: destIata, currency: json.currency || currency, total: deals.length, deals });
+  } catch (e) {
+    res.status(500).json({ status: 'error', message: e.message });
+  }
+});
+
+// GET Popular routes + cheap deals per city (Aviasales Data API, cached 6h)
+app.get('/api/flights/popular', async (req, res) => {
+  try {
+    const { origin = 'CGK', currency = 'idr', limit = 8 } = req.query;
+    const originIata = String(origin).toUpperCase().slice(0, 3);
+    const cachePath = `/tmp/aviasales_popular_${originIata.toLowerCase()}.json`;
+    const cached = readAviaCache(cachePath);
+    if (cached) return res.json({ status: 'ok', source: 'cache', origin: originIata, currency, total: cached.length, routes: cached });
+
+    const params = new URLSearchParams({
+      origin: originIata,
+      currency: currency,
+      sorting: 'price',
+      limit: '30'
+    });
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    params.set('period_type', 'month');
+    params.set('beginning_of_period', `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(1)}`);
+    const url = `https://api.travelpayouts.com/aviasales/v3/get_latest_prices?${params.toString()}`;
+    const resp = await fetch(url, { headers: { 'X-Access-Token': AVIA_TOKEN } });
+    if (!resp.ok) return res.status(502).json({ status: 'error', code: resp.status, message: 'Aviasales API error' });
+    const json = await resp.json();
+    const raw = (json && json.data) || [];
+    const marker = TRAVELPAYOUTS_CONFIG.marker_id;
+
+    // Dedupe per destination (keep cheapest of each route) -> "Rute Populer dari {kota}"
+    const seen = new Map();
+    for (const d of raw) {
+      if (!d.destination) continue;
+      if (!seen.has(d.destination) || (d.value || Infinity) < (seen.get(d.destination).value || Infinity)) {
+        seen.set(d.destination, d);
+      }
+    }
+    const routes = [...seen.values()].slice(0, parseInt(limit, 10) || 8).map(d => {
+      const ddStr = String(d.depart_date || '').slice(0, 10);
+      const flightToken = `${d.origin || originIata}${ddStr.slice(8, 10)}${ddStr.slice(5, 7)}${d.destination || 'X'}1`;
+      const wlParams = new URLSearchParams({
+        origin_iata: d.origin || originIata,
+        destination_iata: d.destination || 'X',
+        depart_date: ddStr,
+        adults: '1',
+        locale: 'id'
+      });
+      return {
+        destination: d.destination,
+        price: formatIdr(d.value), currency: json.currency || currency,
+        number_of_changes: d.number_of_changes ?? 0,
+        platform: d.gate || 'Aviasales',
+        depart_date: d.depart_date,
+        deep_link: `https://us.mytriv.com/?flightSearch=${flightToken}&${wlParams.toString()}`
+      };
+    });
+
+    writeAviaCache(cachePath, routes);
+    res.json({ status: 'ok', source: 'live', origin: originIata, currency: json.currency || currency, total: routes.length, routes });
+  } catch (e) {
+    res.status(500).json({ status: 'error', message: e.message });
+  }
+});
+
 // GET Travelpayouts Hotel Aggregator Search Endpoint
 app.get('/api/travelpayouts/hotels/search', (req, res) => {
   try {
@@ -1762,17 +1903,20 @@ app.get('/api/travelpayouts/hotels/search', (req, res) => {
 
     // Rich Hotel Dataset enriched with Travelpayouts Affiliate Marker
     const matchingHotels = WORLDWIDE_HOTELS.filter(h => 
-      h.city.toLowerCase().includes(city.toLowerCase()) || 
-      h.country.toLowerCase().includes(city.toLowerCase())
+      (h.city || '').toLowerCase().includes(city.toLowerCase()) || 
+      (h.country || '').toLowerCase().includes(city.toLowerCase())
     );
 
+    const cityForSearch = (matchingHotels.length > 0 ? city : 'Jakarta');
+    // Deep-link langsung ke OTA (tanpa tp.media): lebih andal dan selalu mendarat
+    // ke halaman yang benar. marker dipakai sebagai parameter afiliasi standar.
     const results = (matchingHotels.length > 0 ? matchingHotels : WORLDWIDE_HOTELS.slice(0, 5)).map(h => ({
       ...h,
       affiliate_urls: {
-        agoda: `https://tp.media/r?marker=${marker}&p=4115&u=${encodeURIComponent(`https://www.agoda.com/search?text=${h.name}`)}`,
-        booking: `https://tp.media/r?marker=${marker}&p=4114&u=${encodeURIComponent(`https://www.booking.com/searchresults.html?ss=${h.name}`)}`,
-        trip: `https://tp.media/r?marker=${marker}&p=5075&u=${encodeURIComponent(`https://www.trip.com/hotels/list?keyword=${h.name}`)}`,
-        traveloka: `https://tp.media/r?marker=${marker}&p=4115&u=${encodeURIComponent(`https://www.traveloka.com/en-id/hotel/search?spec=${h.name}`)}`
+        agoda: `https://www.agoda.com/city/${encodeURIComponent(cityForSearch.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}.html?cid=1893836&tag=${marker}&text=${encodeURIComponent(h.name || '')}`,
+        booking: `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(h.name || cityForSearch)}&aid=${marker}&nflt=ht_id=204`,
+        trip: `https://www.trip.com/hotels/list?keyword=${encodeURIComponent(h.name)}&Allianceid=${marker}`,
+        traveloka: `https://www.traveloka.com/en-id/hotel/search?spec=${encodeURIComponent(h.name)}&marker=${marker}`
       }
     }));
 
@@ -2149,6 +2293,182 @@ app.post('/api/maps/poi/:id/image', async (req, res) => {
     await pool.query('UPDATE user_pois SET image_url=$1 WHERE id=$2', [image_url, id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// =================================================================
+// 🤖 AI CONTEXT ENDPOINT — provides real data for AI chat
+// =================================================================
+
+// GET /api/ai-context?q=keyword — search hotels, cities, countries for AI context
+app.get('/api/ai-context', async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim().toLowerCase();
+    if (!q || q.length < 2) return res.json({ hotels: [], cities: [], countries: [] });
+
+    // Search hotels by name/slug
+    const hotels = await pool.query(
+      `SELECT h.name, h.slug, h.stars, h.rating, h.price_idr, h.city, h.country, h.image
+       FROM hotels h
+       WHERE LOWER(h.name) LIKE '%' || $1 || '%' OR LOWER(h.slug) LIKE '%' || $1 || '%'
+       ORDER BY h.rating DESC NULLS LAST LIMIT 10`,
+      [q]
+    );
+
+    // Search cities
+    const cities = await pool.query(
+      `SELECT c.name, c.slug, c.country_code, c.lat, c.lng,
+              (SELECT COUNT(*) FROM hotels h WHERE h.city_id = c.id) AS hotel_count
+       FROM cities c
+       WHERE LOWER(c.name) LIKE '%' || $1 || '%'
+       ORDER BY (SELECT COUNT(*) FROM hotels h WHERE h.city_id = c.id) DESC LIMIT 5`,
+      [q]
+    );
+
+    // Search countries
+    const countries = await pool.query(
+      `SELECT cc.name, cc.code,
+              (SELECT COUNT(*) FROM cities c WHERE c.country_code = cc.code) AS city_count
+       FROM countries cc
+       WHERE LOWER(cc.name) LIKE '%' || $1 || '%'
+       ORDER BY (SELECT COUNT(*) FROM cities c WHERE c.country_code = cc.code) DESC LIMIT 5`,
+      [q]
+    );
+
+    res.json({
+      hotels: hotels.rows.map(h => ({
+        name: h.name, slug: h.slug, stars: h.stars, rating: h.rating,
+        price_idr: h.price_idr, city: h.city, country: h.country, image: h.image,
+        link: `https://mytriv.com/hotel/${h.slug}`
+      })),
+      cities: cities.rows.map(c => ({
+        name: c.name, slug: c.slug, country_code: c.country_code,
+        lat: c.lat, lng: c.lng, hotel_count: c.hotel_count,
+        link: `https://mytriv.com/maps/${c.slug}`
+      })),
+      countries: countries.rows.map(c => ({
+        name: c.name, code: c.code, city_count: c.city_count,
+        link: `https://mytriv.com/hotels/${c.code.toLowerCase()}`
+      }))
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/ai-context/hotels?city=d Bali — get hotels in a city for AI
+app.get('/api/ai-context/hotels', async (req, res) => {
+  try {
+    const city = String(req.query.city || '').trim();
+    if (!city) return res.json({ hotels: [] });
+
+    const { rows } = await pool.query(
+      `SELECT h.name, h.slug, h.stars, h.rating, h.price_idr, h.city, h.country, h.image
+       FROM hotels h
+       WHERE LOWER(h.city) = LOWER($1)
+       ORDER BY h.rating DESC NULLS LAST LIMIT 15`,
+      [city]
+    );
+
+    res.json({
+      city,
+      hotels: rows.map(h => ({
+        name: h.name, slug: h.slug, stars: h.stars, rating: h.rating,
+        price_idr: h.price_idr, city: h.city, country: h.country, image: h.image,
+        link: `https://mytriv.com/hotel/${h.slug}`
+      }))
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/ai-context/stats — total hotel/city/country count for AI
+app.get('/api/ai-context/stats', async (req, res) => {
+  try {
+    const [hotels, cities, countries] = await Promise.all([
+      pool.query('SELECT COUNT(*)::int AS count FROM hotels'),
+      pool.query('SELECT COUNT(*)::int AS count FROM cities'),
+      pool.query('SELECT COUNT(*)::int AS count FROM countries')
+    ]);
+    res.json({
+      hotels: hotels.rows[0].count,
+      cities: cities.rows[0].count,
+      countries: countries.rows[0].count
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+// POST /api/ai-chat — Secure proxy endpoint for OpenRouter AI Travel Assistant
+app.post('/api/ai-chat', async (req, res) => {
+  try {
+    const { messages, message } = req.body || {};
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    
+    let chatHistory = Array.isArray(messages) ? messages.slice(-10) : [];
+    const userPrompt = message || (chatHistory.length > 0 ? chatHistory[chatHistory.length - 1].content : '');
+    
+    if (!userPrompt) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    if (!chatHistory.some(m => m.role === 'system')) {
+      chatHistory.unshift({
+        role: 'system',
+        content: 'You are MyTriv AI Travel Assistant. You help users find hotels, flights, destinations, and plan trips. You can recommend hotels, suggest itineraries, provide budget estimates, and give travel tips. Be friendly, helpful, and concise. Use emojis occasionally. Respond in the same language as the user (Indonesian or English). MyTriv compares prices from 8 OTA partners: Agoda, Traveloka, Trip.com, Expedia, Hotels.com, Kayak, Klook, and Booking.com. CRITICAL RULE: When recommending hotels, you MUST ONLY use the EXACT hotel names and slugs provided in the context data. NEVER make up or guess hotel names or slugs. If context data shows hotels, use ONLY those hotels with their exact slugs. Format: **Hotel Name** https://mytriv.com/hotel/[exact-slug-from-context].'
+      });
+    }
+
+    try {
+      const q = String(userPrompt).trim().toLowerCase();
+      if (q.length >= 2) {
+        const hotels = await pool.query(
+          `SELECT h.name, h.slug, h.stars, h.rating, h.price_idr, h.city, h.country
+           FROM hotels h
+           WHERE LOWER(h.name) LIKE '%' || $1 || '%' OR LOWER(h.slug) LIKE '%' || $1 || '%'
+           ORDER BY h.rating DESC NULLS LAST LIMIT 5`,
+          [q]
+        );
+        if (hotels.rows.length > 0) {
+          const hotelInfo = hotels.rows.map(h => 
+            `${h.name} (${h.city}, ${h.country}) - Rating: ${h.rating} - Link: https://mytriv.com/hotel/${h.slug}`
+          ).join('\n');
+          chatHistory.push({
+            role: 'system',
+            content: `Database MyTriv ditemukan hotel berikut:\n${hotelInfo}\nGunakan data ini untuk rekomendasikan hotel kepada user. SERTAKAN link hotel di jawaban.`
+          });
+        }
+      }
+    } catch (e) {
+      console.error('RAG enrichment error:', e.message);
+    }
+
+    const fetch = globalThis.fetch || require('node-fetch');
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-3.1-8b-instruct',
+        messages: chatHistory,
+        max_tokens: 1024
+      })
+    });
+
+    const data = await response.json();
+    if (data.choices && data.choices[0]) {
+      res.json({ reply: data.choices[0].message.content, choices: data.choices });
+    } else {
+      res.status(500).json({ error: 'AI service unavailable', details: data });
+    }
+  } catch (err) {
+    console.error('AI chat error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 const createSeoRouter = require('./seo');

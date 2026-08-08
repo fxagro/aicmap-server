@@ -100,6 +100,151 @@ function hotelImage(h, w = 800) {
   return hotelImgUrl((h.city || h.city_name || '') + '|' + (h.country || h.country_name || ''));
 }
 
+// --- Aviasales Data API: city→IATA resolve (cached 30d) + cheap-deals fetch (cached 6h) ---
+const _httpsNode = require('https');
+let AVIA_IATA_CACHE = {};    // city_cache: {[cityLower]: 'DPS'}
+const AVIA_IATA_TTL = 30 * 24 * 60 * 60 * 1000;
+function _httpsGetString(url, timeoutMs = 12000) {
+  return new Promise((resolvePromise) => {
+    const req = _httpsNode.get(url, { timeout: timeoutMs }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolvePromise(Buffer.concat(chunks).toString('utf8')));
+    });
+    req.on('timeout', () => { try { req.destroy(); } catch (e) {} resolvePromise(null); });
+    req.on('error', () => resolvePromise(null));
+  });
+}
+async function resolveCityIata(cityName) {
+  const key = String(cityName || '').trim().toLowerCase();
+  if (!key) return null;
+  const cached = AVIA_IATA_CACHE[key];
+  if (cached && cached.t > Date.now()) return cached.iata;
+  try {
+    const url = `https://suggest.aviasales.ru/v2/places.json?term=${encodeURIComponent(key)}&locale=id&types[]=city&limit=1`;
+    const raw = await _httpsGetString(url);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length && arr[0].code) {
+        AVIA_IATA_CACHE[key] = { iata: arr[0].code, t: Date.now() + AVIA_IATA_TTL };
+        return arr[0].code;
+      }
+    }
+  } catch (e) {}
+  AVIA_IATA_CACHE[key] = { iata: null, t: Date.now() + AVIA_IATA_TTL };
+  return null;
+}
+
+// Reverse lookup: IATA code → city name (e.g. DPS → "Denpasar")
+let IATA_CITY_CACHE = {};
+const IATA_CITY_TTL = 30 * 24 * 60 * 60 * 1000;
+async function resolveIataToCity(iata) {
+  const code = String(iata || '').trim().toUpperCase();
+  if (!code || code.length !== 3) return code;
+  const cached = IATA_CITY_CACHE[code];
+  if (cached && cached.t > Date.now()) return cached.city;
+  // Try airport search first to get city_name
+  try {
+    const url = `https://suggest.aviasales.ru/v2/places.json?term=${encodeURIComponent(code)}&locale=id&types[]=airport&limit=1`;
+    const raw = await _httpsGetString(url);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length && arr[0].city_name) {
+        IATA_CITY_CACHE[code] = { city: arr[0].city_name, t: Date.now() + IATA_CITY_TTL };
+        return arr[0].city_name;
+      }
+    }
+  } catch (e) {}
+  // Fallback: try city search with the IATA code
+  try {
+    const url2 = `https://suggest.aviasales.ru/v2/places.json?term=${encodeURIComponent(code)}&locale=id&types[]=city&limit=1`;
+    const raw2 = await _httpsGetString(url2);
+    if (raw2) {
+      const arr2 = JSON.parse(raw2);
+      if (Array.isArray(arr2) && arr2.length && arr2[0].name) {
+        IATA_CITY_CACHE[code] = { city: arr2[0].name, t: Date.now() + IATA_CITY_TTL };
+        return arr2[0].name;
+      }
+    }
+  } catch (e) {}
+  IATA_CITY_CACHE[code] = { city: code, t: Date.now() + IATA_CITY_TTL };
+  return code;
+}
+async function fetchAviaDeals(originIata, limit = 6) {
+  try {
+    const url = `http://127.0.0.1:3099/api/flights/deals?origin=${encodeURIComponent(originIata)}&limit=${limit}`;
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    const j = await resp.json();
+    return (j && j.deals) || [];
+  } catch (e) { return []; }
+}
+function renderAviaDealsBlock(originIata, cityName, deals) {
+  if (!deals || !deals.length) return '';
+  const rows = deals.map(d => `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #30363d;font-size:12px">
+      <div style="min-width:0">
+        <div style="color:#c9d1d9;font-weight:600">${esc(d.destination)} <span style="color:#58a6ff;font-weight:700">${new Intl.NumberFormat('id-ID').format(d.price || 0)}</span></div>
+        <div style="color:#8b949e;font-size:11px">${d.platform || 'Aviasales'} · ${String(d.depart_date).slice(5, 10)} · ${d.number_of_changes === 0 ? 'Langsung' : (d.number_of_changes + 'x transit')}</div>
+      </div>
+      <a href="${esc(d.deep_link)}" target="_blank" rel="noopener" style="background:#1f6feb;color:#fff;border:none;border-radius:5px;padding:5px 9px;font-size:11px;text-decoration:none;white-space:nowrap">Lihat</a>
+    </div>`).join('');
+  return `
+    <div style="margin-top:8px;padding:10px;background:#161b22;border:1px solid #30363d;border-radius:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <b style="color:#f0c040;font-size:12px">✈️ Tiket Termurah dari ${esc(cityName)}</b>
+      </div>
+      ${rows}
+      <a href="/book/" style="display:block;text-align:center;color:#58a6ff;font-size:11px;margin-top:6px;text-decoration:none">Cari semua penerbangan →</a>
+    </div>`;
+}
+
+async function fetchAviaPopular(originIata, limit = 6) {
+  try {
+    const url = `http://127.0.0.1:3099/api/flights/popular?origin=${encodeURIComponent(originIata)}&limit=${limit}`;
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    const j = await resp.json();
+    return (j && j.routes) || [];
+  } catch (e) { return []; }
+}
+
+// Hotel-page style blocks (light theme, uses var(--...) from hotel CSS)
+function renderHotelDealsSection(cityName, deals) {
+  if (!deals || !deals.length) return '';
+  const rows = deals.map(d => `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="min-width:0">
+        <div style="font-weight:700;color:var(--txt);font-size:14px;">${esc(d.origin)} → ${esc(d.destination)} <span style="color:var(--ac);font-size:13px;">Rp ${new Intl.NumberFormat('id-ID').format(d.price || 0)}</span></div>
+        <div style="color:var(--mut);font-size:11.5px;margin-top:2px;">${d.platform || 'Aviasales'} · ${String(d.depart_date).slice(0, 10)} · ${d.number_of_changes === 0 ? 'Langsung' : (d.number_of_changes + 'x transit')}</div>
+      </div>
+      <a href="${esc(d.deep_link)}" target="_blank" rel="noopener" style="background:linear-gradient(135deg,var(--cy),#2563eb);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;">Lihat →</a>
+    </div>`).join('');
+  return `
+  <section class="seo-section">
+    <h2>✈️ Tiket Termurah dari ${esc(cityName)}</h2>
+    <p style="color:var(--mut);font-size:12px;margin-bottom:6px;">Harga terbaik ke berbagai destinasi (sumber: Aviasales). Klik untuk langsung cari penerbangan di MyTriv.</p>
+    ${rows}
+    <div style="text-align:center;margin-top:12px;"><a class="mini-cta" href="/book/" style="display:inline-block;">🔍 Cari Penerbangan di MyTriv Book →</a></div>
+  </section>`;
+}
+
+function renderHotelPopularSection(cityName, routes) {
+  if (!routes || !routes.length) return '';
+  const chips = routes.map(r => `
+    <a href="${esc(r.deep_link)}" target="_blank" rel="noopener" style="display:inline-block;background:var(--bg2);border:1px solid var(--border);border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--txt);text-decoration:none;margin:4px 4px 0 0;">
+      ${esc(r.destination)} <span style="color:var(--ac);font-weight:700;">Rp ${new Intl.NumberFormat('id-ID').format(r.price || 0)}</span>
+    </a>`).join('');
+  return `
+  <section class="seo-section">
+    <h2>🌏 Rute Populer dari ${esc(cityName)}</h2>
+    <div style="display:flex;flex-wrap:wrap;margin:-4px 0 0 -4px;">
+      ${chips}
+    </div>
+    <p style="color:var(--mut);font-size:11px;margin-top:8px;">Rute termurah dari data pencarian Aviasales (cache ±7 hari). Harga dapat berubah.</p>
+  </section>`;
+}
+
 function amenities(h) {
   const list = [];
   if (h.wifi) list.push('WiFi Gratis');
@@ -1061,6 +1206,20 @@ Sitemap: ${SITE}/sitemap.xml
         nearby = n.rows.map(x => ({ ...x, stars: sanStars(x.stars), rating: sanRating(x.rating), price_idr: sanPrice(x.price_idr) }));
       }
 
+      // Aviasales: tiket termurah + rute populer dari kota hotel (silent-fail)
+      let hotelDealsSection = '', hotelPopularSection = '';
+      try {
+        const hotelCityIata = await resolveCityIata(h.city_name || h.city || '');
+        if (hotelCityIata) {
+          const [deals, popular] = await Promise.all([
+            fetchAviaDeals(hotelCityIata, 4),
+            fetchAviaPopular(hotelCityIata, 8)
+          ]);
+          hotelDealsSection = renderHotelDealsSection(h.city_name || h.city || '', deals);
+          hotelPopularSection = renderHotelPopularSection(h.city_name || h.city || '', popular);
+        }
+      } catch (e) { hotelDealsSection = ''; hotelPopularSection = ''; }
+
       const title = `${h.name} — Harga & Booking ${loc} | MyTriv Hotels`;
       const desc = `Cek harga terbaik ${h.name} di ${loc}. ${am.slice(0, 4).join(', ')}. Bandingkan harga Booking.com, Agoda, Trip.com, Traveloka & Expedia. Booking online terpercaya.`;
       const ogImage = hotelImage(h, 800);
@@ -1863,6 +2022,34 @@ const body = `
     <\/script>
   </section>
 
+${hotelDealsSection}
+${hotelPopularSection}
+
+<!-- CROSS-LINK: Penerbangan dari kota hotel -->
+<section class="seo-section" style="margin-bottom:32px;">
+  <h2>✈️ Penerbangan dari ${esc(h.city_name || h.city || loc)}</h2>
+  <p style="color:var(--mut);font-size:13px;margin-bottom:12px;">Cari tiket pesawat dari ${esc(h.city_name || h.city || loc)} ke destinasi favorit Anda. Klik tombol di bawah untuk langsung cari di MyTriv Booking.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="https://us.mytriv.com/?origin_iata=&destination_iata=&adults=1&locale=id" target="_blank" style="display:inline-block;background:linear-gradient(135deg,var(--cy),#2563eb);color:#fff;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;text-decoration:none;">🔍 Cari Penerbangan dari ${esc(h.city_name || h.city || loc)} →</a>
+    <a href="/book/" style="display:inline-block;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;color:var(--txt);text-decoration:none;">📖 Buka MyTriv Book</a>
+  </div>
+</section>
+
+<!-- CROSS-LINK: Hotel lain di kota yang sama -->
+${similarHotels && similarHotels.length ? `
+<section class="seo-section" style="margin-bottom:32px;">
+  <h2>🏨 Hotel Lainnya di ${esc(h.city_name || h.city || loc)}</h2>
+  <p style="color:var(--mut);font-size:13px;margin-bottom:12px;">Pilihan akomodasi lain di ${esc(h.city_name || h.city || loc)} yang mungkin Anda sukai.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+    ${similarHotels.map(s => `
+      <a href="/hotel/${s.slug}" target="_blank" style="display:block;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;text-decoration:none;color:var(--txt);">
+        <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${esc((s.name || '').slice(0, 40))}</div>
+        <div style="font-size:11px;color:var(--mut);">⭐ ${s.rating || 4.0} · ${'★'.repeat(s.stars || 3)}${s.stars >= 4 ? ' · Premium' : ''}</div>
+      </a>`).join('')}
+  </div>
+  <div style="text-align:center;margin-top:12px;"><a class="mini-cta" href="/maps/${citySlug}">Lihat Semua Hotel di ${esc(h.city_name || h.city || loc)} →</a></div>
+</section>` : ''}
+
 </div><!-- /.wrap -->
 </div><!-- /.hd-page -->
 
@@ -2664,6 +2851,247 @@ loadReviews('pending');
     res.send(shell({ title: 'Review Moderation - MyTriv', desc: 'Approve or reject guest reviews', canonical: SITE + '/admin/reviews', ogImage: hotelImage({}, 800), body, user: req.user }));
   });
 
+  // ============ ROUTE PAGE: /maps/DPS-SUB ============
+  // Must come BEFORE /maps/:city to avoid capture
+  router.get('/maps/:origin-:dest', async (req, res) => {
+    try {
+      const { origin: origCode, dest: destCode } = req.params;
+      // Only match 3-letter IATA codes (e.g. DPS-SUB)
+      if (!/^[A-Za-z]{3}$/.test(origCode) || !/^[A-Za-z]{3}$/.test(destCode)) {
+        return res.redirect('/maps/' + req.params.origin);
+      }
+      const ORIG = origCode.toUpperCase();
+      const DEST = destCode.toUpperCase();
+
+      // Fetch deals between these two cities
+      const dealsRes = await fetch(`http://127.0.0.1:3099/api/flights/deals?origin=${ORIG}&destination=${DEST}&limit=20`).catch(() => null);
+      const dealsJson = dealsRes && dealsRes.ok ? await dealsRes.json().catch(() => ({})) : {};
+      const deals = dealsJson.deals || [];
+
+      // Resolve city names from IATA (cache-friendly)
+      const [origCityName, destCityName] = await Promise.all([
+        resolveIataToCity(ORIG),
+        resolveIataToCity(DEST)
+      ]);
+
+      // Fetch hotels in both cities
+      const [origHotels, destHotels] = await Promise.all([
+        pool.query("SELECT name, slug, stars, rating, price_idr, city FROM hotels WHERE LOWER(city)=$1 AND lat IS NOT NULL ORDER BY rating DESC NULLS LAST LIMIT 6", [origCityName.toLowerCase()]).catch(() => ({ rows: [] })),
+        pool.query("SELECT name, slug, stars, rating, price_idr, city FROM hotels WHERE LOWER(city)=$1 AND lat IS NOT NULL ORDER BY rating DESC NULLS LAST LIMIT 6", [destCityName.toLowerCase()]).catch(() => ({ rows: [] }))
+      ]);
+
+      const formatIdr2 = (n) => {
+        if (!n) return '-';
+        if (n >= 1000000) return 'Rp ' + (n / 1000000).toFixed(1) + ' jt';
+        return 'Rp ' + new Intl.NumberFormat('id-ID').format(n);
+      };
+
+      const origHotelRows = origHotels.rows.map(h => `
+        <a href="/hotel/${h.slug}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);text-decoration:none;color:var(--txt);">
+          <div style="min-width:36px;text-align:center;font-size:13px;font-weight:700;color:var(--ac);">${'★'.repeat(h.stars || 3)}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(h.name)}</div>
+            <div style="font-size:11px;color:var(--mut);">⭐ ${h.rating || 4.0} · ${h.stars || 3}★</div>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--ac);">${h.price_idr ? formatIdr2(h.price_idr) : ''}</div>
+        </a>`).join('');
+
+      const destHotelRows = destHotels.rows.map(h => `
+        <a href="/hotel/${h.slug}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);text-decoration:none;color:var(--txt);">
+          <div style="min-width:36px;text-align:center;font-size:13px;font-weight:700;color:var(--ac);">${'★'.repeat(h.stars || 3)}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(h.name)}</div>
+            <div style="font-size:11px;color:var(--mut);">⭐ ${h.rating || 4.0} · ${h.stars || 3}★</div>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--ac);">${h.price_idr ? formatIdr2(h.price_idr) : ''}</div>
+        </a>`).join('');
+
+      const dealRows = deals.map(d => `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="min-width:0">
+            <div style="font-weight:700;color:var(--txt);font-size:14px;">${esc(d.origin)} → ${esc(d.destination)} <span style="color:var(--ac);font-size:13px;">Rp ${new Intl.NumberFormat('id-ID').format(d.price || 0)}</span></div>
+            <div style="color:var(--mut);font-size:11.5px;margin-top:2px;">${d.platform || 'Aviasales'} · ${String(d.depart_date).slice(0, 10)} · ${d.number_of_changes === 0 ? 'Langsung' : (d.number_of_changes + 'x transit')}</div>
+          </div>
+          <a href="${esc(d.deep_link)}" target="_blank" rel="noopener" style="background:linear-gradient(135deg,var(--cy),#2563eb);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;">Beli →</a>
+        </div>`).join('');
+
+      const body = `
+<div style="max-width:1200px;margin:0 auto;padding:20px;">
+  <!-- Hero -->
+  <div style="text-align:center;padding:40px 0 30px;">
+    <div style="display:inline-block;font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;background:rgba(37,99,235,0.12);color:var(--ac);padding:4px 12px;border-radius:999px;margin-bottom:14px;">MYTRIV ROUTE COMPARISON</div>
+    <h1 style="font-size:clamp(26px,4vw,42px);font-weight:900;margin:0 0 12px;background:linear-gradient(90deg,var(--ac),#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Tiket Pesawat ${esc(origCityName)} → ${esc(destCityName)}</h1>
+    <p style="color:var(--mut);font-size:16px;margin:0 0 24px;">Bandingkan harga penerbangan dari ${esc(origCityName)} (${ORIG}) ke ${esc(destCityName)} (${DEST}). Klik "Beli" untuk langsung cari di MyTriv Booking.</p>
+    <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">
+      <a href="/maps/${ORIG.toLowerCase()}" style="display:inline-block;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;color:var(--txt);text-decoration:none;">🏨 Hotel di ${esc(origCityName)}</a>
+      <a href="/maps/${DEST.toLowerCase()}" style="display:inline-block;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;color:var(--txt);text-decoration:none;">🏨 Hotel di ${esc(destCityName)}</a>
+      <a href="https://us.mytriv.com/?flightSearch=${ORIG}1${DEST}1&origin_iata=${ORIG}&destination_iata=${DEST}&adults=1&locale=id" target="_blank" style="display:inline-block;background:linear-gradient(135deg,var(--cy),#2563eb);color:#fff;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;text-decoration:none;">✈️ Cari Penerbangan Penuh →</a>
+    </div>
+  </div>
+
+  ${dealRows ? `
+  <section class="seo-section" style="margin-bottom:40px;">
+    <h2>✈️ Harga Tiket ${esc(origCityName)} → ${esc(destCityName)}</h2>
+    <p style="color:var(--mut);font-size:12px;margin-bottom:10px;">Harga terbaik dari data Aviasales (cache ±7 hari). Harga dapat berubah sewaktu-waktu.</p>
+    ${dealRows || '<p style="color:var(--mut);font-size:13px;">Belum ada data harga untuk rute ini. <a href="https://us.mytriv.com/?flightSearch=' + ORIG + '1' + DEST + '1&origin_iata=' + ORIG + '&destination_iata=' + DEST + '&adults=1&locale=id" target="_blank" style="color:var(--ac);">Cari langsung di MyTriv Booking →</a></p>'}
+  </section>` : ''}
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:40px;">
+    ${origHotels.rows.length ? `
+    <section class="seo-section">
+      <h2>🏨 Hotel di ${esc(origCityName)}</h2>
+      <p style="color:var(--mut);font-size:12px;margin-bottom:10px;">Akomodasi terbaik di ${esc(origCityName)} sebelum/ sesudah penerbangan.</p>
+      ${origHotelRows}
+      <div style="text-align:center;margin-top:12px;"><a class="mini-cta" href="/maps/${ORIG.toLowerCase()}">Lihat Semua Hotel di ${esc(origCityName)} →</a></div>
+    </section>` : ''}
+    ${destHotels.rows.length ? `
+    <section class="seo-section">
+      <h2>🏨 Hotel di ${esc(destCityName)}</h2>
+      <p style="color:var(--mut);font-size:12px;margin-bottom:10px;">Akomodasi terbaik di ${esc(destCityName)} untuk menginap setelah penerbangan.</p>
+      ${destHotelRows}
+      <div style="text-align:center;margin-top:12px;"><a class="mini-cta" href="/maps/${DEST.toLowerCase()}">Lihat Semua Hotel di ${esc(destCityName)} →</a></div>
+    </section>` : ''}
+  </div>
+
+  <!-- Popular routes from origin -->
+  <section class="seo-section" style="margin-bottom:40px;">
+    <h2>🌍 Rute Populer dari ${esc(origCityName)}</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+      <a href="/maps/${ORIG.toLowerCase()}-${DEST.toLowerCase()}" style="display:inline-block;background:var(--ac);color:#000;border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:700;text-decoration:none;">${DEST} ✔</a>
+    </div>
+    <p style="color:var(--mut);font-size:11px;margin-top:8px;">Klik rute lain untuk membandingkan harga.</p>
+  </section>
+
+  <!-- FAQ -->
+  <section class="seo-section" style="margin-bottom:40px;">
+    <h2>❓ Pertanyaan Umum: ${esc(origCityName)} → ${esc(destCityName)}</h2>
+    <div style="margin-top:12px;">
+      <details style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;">
+        <summary style="font-weight:700;color:var(--txt);font-size:14px;cursor:pointer;">Berapa harga tiket pesawat ${esc(origCityName)} ke ${esc(destCityName)}?</summary>
+        <p style="color:var(--mut);font-size:13px;margin-top:8px;">Harga bervariasi tergantung maskapai, waktu booking, dan tanggal keberangkatan. Gunakan fitur perbandingan di MyTriv Book untuk mendapatkan harga terbaik.</p>
+      </details>
+      <details style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;">
+        <summary style="font-weight:700;color:var(--txt);font-size:14px;cursor:pointer;">Maskapai apa saja yang terbang dari ${esc(origCityName)} ke ${esc(destCityName)}?</summary>
+        <p style="color:var(--mut);font-size:13px;margin-top:8px;">Berbagai maskapai melayani rute ini termasuk Lion Air, Citilink, Garuda Indonesia, Super Air Jet, dan lainnya. Periksa harga terbaru di MyTriv Book.</p>
+      </details>
+      <details style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;">
+        <summary style="font-weight:700;color:var(--txt);font-size:14px;cursor:pointer;">Berapa lama penerbangan ${esc(origCityName)} ke ${esc(destCityName)}?</summary>
+        <p style="color:var(--mut);font-size:13px;margin-top:8px;">Waktu tempuh bervariasi tergantung rute langsung atau transit. Penerbangan langsung biasanya lebih cepat.</p>
+      </details>
+    </div>
+  </section>
+</div>`;
+
+      const title = `Tiket Pesawat ${origCityName} ke ${destCityName} - Harga Termurah | MyTriv`;
+      const desc = `Bandingkan harga tiket pesawat dari ${origCityName} (${ORIG}) ke ${destCityName} (${DEST}). Cari penerbangan termurah dan hotel terbaik di kedua kota.`;
+      const canonical = SITE + '/maps/' + ORIG.toLowerCase() + '-' + DEST.toLowerCase();
+
+      res.set('Cache-Control', 'public, max-age=3600');
+      res.send(shell({ title, desc, canonical, ogImage: hotelImage({}, 800), body }));
+    } catch (e) {
+      console.error('ROUTE PAGE ERROR:', e.message);
+      res.redirect('/maps/' + (req.params.origin || ''));
+    }
+  });
+
+  // ============ AIRPORT PAGE: /airport/DPS ============
+  router.get('/airport/:iata', async (req, res) => {
+    try {
+      const IATA = String(req.params.iata).toUpperCase().slice(0, 3);
+      if (!/^[A-Z]{3}$/.test(IATA)) return res.status(404).send(shell({ title: 'Airport Not Found', desc: 'Invalid IATA code', canonical: SITE + '/airport/' + IATA, body: '<p>Invalid airport code</p>' }));
+
+      // Resolve airport city name
+      const cityName = await resolveIataToCity(IATA);
+
+      // Fetch popular routes from this airport
+      const routesRes = await fetch(`http://127.0.0.1:3099/api/flights/popular?origin=${IATA}&limit=20`).catch(() => null);
+      const routesJson = routesRes && routesRes.ok ? await routesRes.json().catch(() => ({})) : {};
+      const routes = routesJson.routes || [];
+
+      // Fetch hotels in the city
+      const hotelsRes = await pool.query("SELECT name, slug, stars, rating, price_idr, city FROM hotels WHERE LOWER(city)=$1 AND lat IS NOT NULL ORDER BY rating DESC NULLS LAST LIMIT 10", [cityName.toLowerCase()]).catch(() => ({ rows: [] }));
+      const hotels = hotelsRes.rows;
+
+      const formatIdr2 = (n) => {
+        if (!n) return '-';
+        if (n >= 1000000) return 'Rp ' + (n / 1000000).toFixed(1) + ' jt';
+        return 'Rp ' + new Intl.NumberFormat('id-ID').format(n);
+      };
+
+      const routeChips = routes.map(r => `
+        <a href="/maps/${IATA.toLowerCase()}-${String(r.destination).toLowerCase()}" style="display:inline-flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--txt);text-decoration:none;margin:4px;">
+          <span style="font-weight:700;">${esc(r.destination)}</span>
+          <span style="color:var(--ac);font-weight:700;">Rp ${new Intl.NumberFormat('id-ID').format(r.price || 0)}</span>
+        </a>`).join('');
+
+      const hotelRows = hotels.map(h => `
+        <a href="/hotel/${h.slug}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);text-decoration:none;color:var(--txt);">
+          <div style="min-width:36px;text-align:center;font-size:13px;font-weight:700;color:var(--ac);">${'★'.repeat(h.stars || 3)}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(h.name)}</div>
+            <div style="font-size:11px;color:var(--mut);">⭐ ${h.rating || 4.0} · ${h.stars || 3}★</div>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--ac);">${h.price_idr ? formatIdr2(h.price_idr) : ''}</div>
+        </a>`).join('');
+
+      const body = `
+<div style="max-width:1200px;margin:0 auto;padding:20px;">
+  <!-- Hero -->
+  <div style="text-align:center;padding:40px 0 30px;">
+    <div style="display:inline-block;font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;background:rgba(37,99,235,0.12);color:var(--ac);padding:4px 12px;border-radius:999px;margin-bottom:14px;">MYTRIV AIRPORT GUIDE</div>
+    <h1 style="font-size:clamp(26px,4vw,42px);font-weight:900;margin:0 0 12px;background:linear-gradient(90deg,var(--ac),#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Bandara ${esc(cityName)} (${IATA})</h1>
+    <p style="color:var(--mut);font-size:16px;margin:0 0 24px;">Semua penerbangan dari bandara ${esc(cityName)} (${IATA}). Cari tiket pesawat termurah dan hotel terdekat.</p>
+    <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">
+      <a href="/maps/${IATA.toLowerCase()}" style="display:inline-block;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;color:var(--txt);text-decoration:none;">🏨 Hotel di ${esc(cityName)}</a>
+      <a href="https://us.mytriv.com/?origin_iata=${IATA}&adults=1&locale=id" target="_blank" style="display:inline-block;background:linear-gradient(135deg,var(--cy),#2563eb);color:#fff;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;text-decoration:none;">✈️ Cari Penerbangan dari ${IATA} →</a>
+    </div>
+  </div>
+
+  ${routes.length ? `
+  <section class="seo-section" style="margin-bottom:40px;">
+    <h2>🌍 Rute Populer dari ${esc(cityName)} (${IATA})</h2>
+    <p style="color:var(--mut);font-size:12px;margin-bottom:10px;">Rute penerbangan termurah dari bandara ${esc(cityName)}. Klik untuk membandingkan harga.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+      ${routeChips}
+    </div>
+  </section>` : ''}
+
+  ${hotels.length ? `
+  <section class="seo-section" style="margin-bottom:40px;">
+    <h2>🏨 Hotel di ${esc(cityName)}</h2>
+    <p style="color:var(--mut);font-size:12px;margin-bottom:10px;">Akomodasi terbaik di ${esc(cityName)} dekat bandara ${IATA}.</p>
+    ${hotelRows}
+    <div style="text-align:center;margin-top:12px;"><a class="mini-cta" href="/maps/${IATA.toLowerCase()}">Lihat Semua Hotel di ${esc(cityName)} →</a></div>
+  </section>` : ''}
+
+  <!-- FAQ -->
+  <section class="seo-section" style="margin-bottom:40px;">
+    <h2>❓ Pertanyaan tentang Bandara ${esc(cityName)}</h2>
+    <div style="margin-top:12px;">
+      <details style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;">
+        <summary style="font-weight:700;color:var(--txt);font-size:14px;cursor:pointer;">Bandara ${esc(cityName)} melayani rute domestik atau internasional?</summary>
+        <p style="color:var(--mut);font-size:13px;margin-top:8px;">Bandara ${esc(cityName)} (${IATA}) melayani penerbangan domestik dan internasional. Periksa rute yang tersedia di atas.</p>
+      </details>
+      <details style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;">
+        <summary style="font-weight:700;color:var(--txt);font-size:14px;cursor:pointer;">Bagaimana cara ke bandara ${esc(cityName)}?</summary>
+        <p style="color:var(--mut);font-size:13px;margin-top:8px;">Bandara ${esc(cityName)} dapat diakses dengan taksi, ojek online, atau transportasi umum. Cek opsi transportasi di hotel Anda.</p>
+      </details>
+    </div>
+  </section>
+</div>`;
+
+      const title = `Bandara ${cityName} (${IATA}) - Tiket Pesawat & Hotel | MyTriv`;
+      const desc = `Semua penerbangan dari bandara ${cityName} (${IATA}). Cari tiket pesawat termurah dan hotel terdekat di ${cityName}.`;
+      const canonical = SITE + '/airport/' + IATA;
+
+      res.set('Cache-Control', 'public, max-age=3600');
+      res.send(shell({ title, desc, canonical, ogImage: hotelImage({}, 800), body }));
+    } catch (e) {
+      console.error('AIRPORT PAGE ERROR:', e.message);
+      res.redirect('/');
+    }
+  });
+
   // ============ MAP EXPLORER ============
   router.get('/maps/:city', async (req, res) => {
     try {
@@ -2690,6 +3118,27 @@ loadReviews('pending');
       
       const title = `Peta Interaktif Hotel di ${titleCity} — MyTriv Maps`;
       const desc = `Jelajahi ${hotels.length} hotel di ${titleCity}${countryName ? ', ' + countryName : ''} dengan peta interaktif. Filter berdasarkan rating, harga, dan kategori. Bandingkan harga Booking.com, Agoda, Traveloka.`;
+
+      // Aviasales: resolve city→IATA + tampilkan tiket termurah (non-blocking-safe)
+      let aviaDealsBlock = '', aviaPopularBlock = '';
+      try {
+        const cityIata = await resolveCityIata(cityName);
+        if (cityIata) {
+          const [deals, popular] = await Promise.all([
+            fetchAviaDeals(cityIata, 6),
+            fetchAviaPopular(cityIata, 8)
+          ]);
+          if (deals.length) aviaDealsBlock = renderAviaDealsBlock(cityIata, cityName, deals);
+          if (popular.length) {
+            const chips = popular.map(r => `<a href="${esc(r.deep_link)}" target="_blank" rel="noopener" style="display:inline-block;background:#21262d;border:1px solid #30363d;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:600;color:#c9d1d9;text-decoration:none;margin:3px 3px 0 0;">${esc(r.destination)} <span style="color:#58a6ff;">${new Intl.NumberFormat('id-ID').format(r.price || 0)}</span></a>`).join('');
+            aviaPopularBlock = `
+    <div style="margin-top:8px;padding:10px;background:#161b22;border:1px solid #30363d;border-radius:8px">
+      <b style="color:#58a6ff;font-size:12px">🌏 Rute Populer dari ${esc(cityName)}</b>
+      <div style="display:flex;flex-wrap:wrap;margin:0 0 0 -3px;margin-top:4px">${chips}</div>
+    </div>`;
+            }
+        }
+      } catch (e) { aviaDealsBlock = ''; aviaPopularBlock = ''; }
       
       const mapHtml = `
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
@@ -2731,11 +3180,17 @@ loadReviews('pending');
     <div class="stat">💰 <b>${hotels.filter(h=>h.price_idr<800000).length}</b> budget</div>
     <div class="stat">🌟 <b>${hotels.filter(h=>(h.stars||4)>=4).length}</b> premium</div>
   </div>
+  <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;">
+    <a href="/book/" style="display:inline-block;background:#f59e0b;color:#000;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;text-decoration:none;">✈️ Cari Penerbangan</a>
+    <a href="https://us.mytriv.com/?adults=1&locale=id" target="_blank" style="display:inline-block;background:#1f6feb;color:#fff;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;text-decoration:none;">🔍 Booking Penuh</a>
+  </div>
   <input type="text" id="hotel-search" placeholder="🔍 Cari hotel..." style="width:100%;padding:8px 10px;background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;font-size:12px;margin-bottom:8px" oninput="searchHotel(this.value)">
   <button onclick="filterAll()" class="active" id="btn-all">📍 Semua Hotel (${hotels.length})</button>
   <button onclick="filterBy('premium')" id="btn-premium">🌟 Premium (4-5 bintang)</button>
   <button onclick="filterBy('budget')" id="btn-budget">💰 Budget (<800rb)</button>
   <div id="hotel-list">${hotels.slice(0,20).map(h=>`<a href="/hotel/${h.slug}" target="_blank">⭐${h.stars||4} ${esc(h.name).slice(0,28)}</a>`).join('')}</div>
+  ${aviaPopularBlock}
+  ${aviaDealsBlock}
 </div>
 <!-- FLOATING AI CHAT ASSISTANT (maps) -->
 <button class="hd-chat-fab" onclick="hdChatToggle()" aria-label="AI Chat Assistant">🤖</button>
