@@ -250,7 +250,7 @@ app.get('/api/members', async (req, res) => {
 // POST Register Member
 app.post('/api/members', async (req, res) => {
   try {
-    const { name, role = 'Builder', country, province, city, lat, lng, bio, email } = req.body || {};
+    const { name, role = 'Traveller', country, province, city, lat, lng, bio, email } = req.body || {};
     if (!name || !country) return res.status(400).json({ error: 'Nama dan Negara wajib diisi' });
 
     const colors = ['#00f0ff', '#ff00ff', '#00ff88', '#ffaa00', '#7c3aed', '#f43f5e', '#22d3ee', '#facc15'];
@@ -421,7 +421,7 @@ app.post('/api/monopoly/credit-subscription', rateLimit(20), async (req, res) =>
     const { member_id, subscription_tier = 'basic_edu' } = req.body || {};
     if (!member_id) return res.status(400).json({ error: 'member_id wajib' });
     const mId = parseInt(member_id);
-    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Builder', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
+    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Traveller', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
 
     const p = await pool.query(`SELECT * FROM monopoly_players WHERE member_id = $1`, [mId]);
     if (!p.rowCount) return res.status(404).json({ error: 'Player tidak ditemukan' });
@@ -462,7 +462,7 @@ app.post('/api/monopoly/roll-dice', rateLimit(30), async (req, res) => {
     const { member_id } = req.body || {};
     if (!member_id) return res.status(401).json({ error: 'Silakan Login SSO terlebih dahulu.' });
     const mId = parseInt(member_id);
-    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Builder', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
+    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Traveller', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
 
     const p = await pool.query(`SELECT * FROM monopoly_players WHERE member_id = $1`, [mId]);
     if (!p.rowCount) return res.status(404).json({ error: 'Player tidak ditemukan' });
@@ -547,7 +547,7 @@ app.post('/api/monopoly/buy-property', rateLimit(30), async (req, res) => {
     if (!member_id || !property_id) return res.status(400).json({ error: 'member_id dan property_id wajib' });
     const mId = parseInt(member_id);
     const pId = parseInt(property_id);
-    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Builder', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
+    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Traveller', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
 
     const prop = await pool.query(`SELECT * FROM monopoly_properties WHERE id = $1`, [pId]);
     if (!prop.rowCount) return res.status(404).json({ error: 'Properti tidak ditemukan' });
@@ -578,7 +578,7 @@ app.post('/api/monopoly/upgrade-property', rateLimit(30), async (req, res) => {
     if (!member_id || !property_id) return res.status(400).json({ error: 'member_id dan property_id wajib' });
     const mId = parseInt(member_id);
     const pId = parseInt(property_id);
-    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Builder', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
+    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Traveller', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
 
     const prop = await pool.query(`SELECT * FROM monopoly_properties WHERE id = $1`, [pId]);
     if (!prop.rowCount) return res.status(404).json({ error: 'Properti tidak ditemukan' });
@@ -610,7 +610,7 @@ app.post('/api/monopoly/answer-quiz', rateLimit(30), async (req, res) => {
       return res.status(400).json({ error: 'member_id, quiz_id, dan selected_option wajib' });
     }
     const mId = parseInt(member_id);
-    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Builder', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
+    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Traveller', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
 
     const qz = await pool.query(`SELECT * FROM edu_quizzes WHERE id = $1`, [parseInt(quiz_id)]);
     if (!qz.rowCount) return res.status(404).json({ error: 'Kuis tidak ditemukan' });
@@ -655,7 +655,7 @@ app.post('/api/monopoly/marketplace/list-property', rateLimit(30), async (req, r
     if (!member_id || !property_id || !asking_price) return res.status(400).json({ error: 'member_id, property_id, asking_price wajib' });
     const mId = parseInt(member_id);
     const pId = parseInt(property_id);
-    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Builder', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
+    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Traveller', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
     const price = parseInt(asking_price);
 
     const prop = await pool.query(`SELECT * FROM monopoly_properties WHERE id = $1`, [pId]);
@@ -680,7 +680,7 @@ app.post('/api/monopoly/marketplace/buy-listing', rateLimit(30), async (req, res
     if (!member_id || !listing_id) return res.status(400).json({ error: 'member_id dan listing_id wajib' });
     const mId = parseInt(member_id);
     const lId = parseInt(listing_id);
-    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Builder', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
+    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Traveller', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
 
     const listing = await pool.query(`SELECT * FROM monopoly_listings WHERE id = $1 AND status = 'active'`, [lId]);
     if (!listing.rowCount) return res.status(404).json({ error: 'Listing tidak ditemukan atau sudah tidak aktif' });
@@ -1224,7 +1224,7 @@ app.post('/api/hotels/redeem-trivcoin', async (req, res) => {
     }
 
     const mId = parseInt(member_id);
-    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Builder', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
+    await pool.query(`INSERT INTO members (id, name, country) VALUES ($1, 'Traveller', 'ID') ON CONFLICT (id) DO NOTHING`, [mId]);
     const coins = parseInt(coins_to_redeem);
     if (coins < 500) return res.status(400).json({ error: 'Penukaran minimal 500 TrivCoin.' });
 
