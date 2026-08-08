@@ -121,57 +121,63 @@ const ADMIN_TOKEN = process.env.AIMAP_ADMIN_TOKEN || 'mytriv-admin-2026';
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'aicmap-monopoly-api' }));
 
 // SSO Login & Sync with Edu MyTriv Database
+async function syncMonopolyPlayer(email) {
+  let eduUser = null;
+  let subscriptionTier = 'free';
+
+  try {
+    const eduQuery = await eduPool.query(
+      `SELECT id, email, name, plan, "extensionPlan", "subscriptionStatus" FROM users WHERE LOWER(email) = LOWER($1)`,
+      [email.trim()]
+    );
+
+    if (eduQuery.rowCount > 0) {
+      eduUser = eduQuery.rows[0];
+      const pVal = (eduUser.plan || eduUser.extensionPlan || 'free').toLowerCase();
+      if (pVal === 'pro' || pVal === 'pro_edu') subscriptionTier = 'pro_edu';
+      else if (pVal === 'basic' || pVal === 'basic_edu') subscriptionTier = 'basic_edu';
+    }
+  } catch (err) {
+    console.error('Edu DB Sync Error:', err.message);
+  }
+
+  let pRes = await pool.query(`SELECT * FROM monopoly_players WHERE LOWER(email) = LOWER($1)`, [email.trim()]);
+  let player;
+
+  if (!pRes.rowCount) {
+    const pName = eduUser ? eduUser.name : email.split('@')[0];
+    const initialCoins = subscriptionTier === 'pro_edu' ? 11000 : (subscriptionTier === 'basic_edu' ? 2500 : 1000);
+
+    const newP = await pool.query(
+      `INSERT INTO monopoly_players (name, email, subscription_tier, balance, country, city)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [pName, email.trim(), subscriptionTier, initialCoins, 'Indonesia', 'Jakarta']
+    );
+    player = newP.rows[0];
+  } else {
+    player = pRes.rows[0];
+    if (player.subscription_tier !== subscriptionTier) {
+      let coinBonus = 0;
+      if (subscriptionTier === 'pro_edu' && player.subscription_tier !== 'pro_edu') coinBonus = 10000;
+      else if (subscriptionTier === 'basic_edu' && player.subscription_tier === 'free') coinBonus = 1500;
+
+      const updated = await pool.query(
+        `UPDATE monopoly_players SET subscription_tier = $1, balance = balance + $2::INTEGER, updated_at = NOW() WHERE member_id = $3 RETURNING *`,
+        [subscriptionTier, coinBonus, player.member_id]
+      );
+      player = updated.rows[0];
+    }
+  }
+
+  return { player, eduUser, subscriptionTier };
+}
+
 app.post('/api/auth/sso-login', async (req, res) => {
   try {
     const { email } = req.body || {};
     if (!email) return res.status(400).json({ error: 'Email Edu wajib diisi' });
 
-    let eduUser = null;
-    let subscriptionTier = 'free';
-
-    try {
-      const eduQuery = await eduPool.query(
-        `SELECT id, email, name, plan, "extensionPlan", "subscriptionStatus" FROM users WHERE LOWER(email) = LOWER($1)`,
-        [email.trim()]
-      );
-
-      if (eduQuery.rowCount > 0) {
-        eduUser = eduQuery.rows[0];
-        const pVal = (eduUser.plan || eduUser.extensionPlan || 'free').toLowerCase();
-        if (pVal === 'pro' || pVal === 'pro_edu') subscriptionTier = 'pro_edu';
-        else if (pVal === 'basic' || pVal === 'basic_edu') subscriptionTier = 'basic_edu';
-      }
-    } catch (err) {
-      console.error('Edu DB Sync Error:', err.message);
-    }
-
-    let pRes = await pool.query(`SELECT * FROM monopoly_players WHERE LOWER(email) = LOWER($1)`, [email.trim()]);
-    let player;
-
-    if (!pRes.rowCount) {
-      const pName = eduUser ? eduUser.name : email.split('@')[0];
-      const initialCoins = subscriptionTier === 'pro_edu' ? 11000 : (subscriptionTier === 'basic_edu' ? 2500 : 1000);
-
-      const newP = await pool.query(
-        `INSERT INTO monopoly_players (name, email, subscription_tier, balance, country, city)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [pName, email.trim(), subscriptionTier, initialCoins, 'Indonesia', 'Jakarta']
-      );
-      player = newP.rows[0];
-    } else {
-      player = pRes.rows[0];
-      if (player.subscription_tier !== subscriptionTier) {
-        let coinBonus = 0;
-        if (subscriptionTier === 'pro_edu' && player.subscription_tier !== 'pro_edu') coinBonus = 10000;
-        else if (subscriptionTier === 'basic_edu' && player.subscription_tier === 'free') coinBonus = 1500;
-
-        const updated = await pool.query(
-          `UPDATE monopoly_players SET subscription_tier = $1, balance = balance + $2::INTEGER, updated_at = NOW() WHERE member_id = $3 RETURNING *`,
-          [subscriptionTier, coinBonus, player.member_id]
-        );
-        player = updated.rows[0];
-      }
-    }
+    const { player, eduUser, subscriptionTier } = await syncMonopolyPlayer(email);
 
     res.json({
       sso_success: true,
@@ -2168,6 +2174,25 @@ app.get('/auth/callback', async function (req, res) {
 });
 app.get('/auth/logout', function (req, res) { res.setHeader('Set-Cookie', authCookieHeader('', 0)); res.redirect(safeRedirect(req.query.redirect)); });
 app.get('/auth/me', function (req, res) { if (!req.user) return res.status(401).json({ user: null }); res.json({ user: { id: req.user.sub, email: req.user.email, name: req.user.name, avatar: req.user.avatar, role: req.user.role } }); });
+
+// Google OAuth -> Monopoly player sync (new users register instantly & can play)
+app.post('/api/auth/google-sso', async (req, res) => {
+  try {
+    if (!req.user || !req.user.email) return res.status(401).json({ error: 'Google login belum tersambung' });
+    const email = req.user.email;
+    const { player, eduUser, subscriptionTier } = await syncMonopolyPlayer(email);
+    res.json({
+      sso_success: true,
+      source: 'google',
+      google_user: { id: req.user.sub, email: req.user.email, name: req.user.name, avatar: req.user.avatar || null },
+      edu_user: eduUser ? { ...eduUser, tier: subscriptionTier } : null,
+      player
+    });
+  } catch (e) {
+    console.error('Google SSO Endpoint Error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ---------- Hotel Reviews (auto-filter + admin approval) ----------
 const REVIEW_MIN_LEN = 20;
