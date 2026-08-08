@@ -1,3 +1,20 @@
+try {
+  const fs = require('fs');
+  const envPath = __dirname + '/.env';
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf8').split('\n');
+    for (const line of lines) {
+      const parts = line.trim().split('=');
+      if (parts.length >= 2 && !parts[0].startsWith('#')) {
+        const key = parts[0].trim();
+        const val = parts.slice(1).join('=').trim();
+        if (key && !process.env[key]) process.env[key] = val;
+      }
+    }
+  }
+} catch (e) {}
+
+
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
