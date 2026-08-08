@@ -46,6 +46,7 @@ function gscReq(token, method, apiPath, body) {
       let d = '';
       res.on('data', (c) => (d += c));
       res.on('end', () => {
+        if (res.statusCode === 204 || !d) return resolve({});
         try {
           const j = JSON.parse(d);
           if (res.statusCode >= 400) return reject(new Error('GSC ' + res.statusCode + ': ' + (j.error ? j.error.message : d.slice(0, 300))));
@@ -73,6 +74,9 @@ function gscReq(token, method, apiPath, body) {
     '/sitemap/hotels/en/3',
     '/sitemap/countries.xml',
     '/sitemap/cities.xml',
+    '/hotels/feeds/maps_city_001.xml',
+    '/hotels/feeds/core_pages.xml',
+    '/sitemap.xml',
   ];
 
   console.log('\nSubmitting sitemaps to GSC...');
