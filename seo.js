@@ -2807,7 +2807,7 @@ ${enFlightCtaBottom}
       <div class="lp-badge">🌍 Cari hotel terbaik · Bandingkan 8 OTA sekaligus</div>
       <h1>Hotel di <span>${esc(c.name)}</span><br>Bandingkan Harga &amp; Pesan</h1>
       <p>${desc}</p>
-      <form class="lp-search" action="/hotels/${country}/" method="get" onsubmit="event.preventDefault();var q=this.querySelector('input').value.trim();if(q)location.href='/hotels/${country}/'+encodeURIComponent(q.toLowerCase().replace(/\s+/g,'-'));">
+      <form class="lp-search" action="/hotels/${country}/" method="get" onsubmit="event.preventDefault();var q=this.querySelector('input').value.trim();if(q)location.href='/hotels/${country}/'+encodeURIComponent(q.toLowerCase().replace(/\\s+/g,'-'));">
         <input type="text" placeholder="Cari kota di ${esc(c.name)}... (contoh: bali, jakarta)" aria-label="Cari kota">
         <button type="submit">🔍 Cari Hotel</button>
       </form>
