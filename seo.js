@@ -245,6 +245,86 @@ function renderHotelPopularSection(cityName, routes) {
   </section>`;
 }
 
+// Country → main airport IATA fallback for flight CTA destination
+const FLIGHT_CTA_COUNTRY_IATA = {
+  'Indonesia':'CGK','Malaysia':'KUL','Singapore':'SIN','Thailand':'BKK','Vietnam':'SGN',
+  'Philippines':'MNL','Cambodia':'PNH','Laos':'VTE','Myanmar':'RGN','Brunei':'BWN',
+  'Timor-Leste':'DIL','Japan':'NRT','South Korea':'ICN','China':'PEK','Hong Kong':'HKG',
+  'Taiwan':'TPE','India':'DEL','Pakistan':'KHI','Bangladesh':'DAC','Sri Lanka':'CMB',
+  'Nepal':'KTM','Bhutan':'PBH','Maldives':'MLE','Afghanistan':'KBL','Iran':'IKA',
+  'Iraq':'BGW','Saudi Arabia':'RUH','UAE':'DXB','United Arab Emirates':'DXB','Qatar':'DOH',
+  'Kuwait':'KWI','Bahrain':'BAH','Oman':'MCT','Yemen':'SAH','Jordan':'AMM','Israel':'TLV',
+  'Lebanon':'BEY','Syria':'DAM','Turkey':'IST','Kazakhstan':'TSE','Uzbekistan':'TAS',
+  'Turkmenistan':'ASB','Kyrgyzstan':'FRU','Tajikistan':'DYU','Mongolia':'UBN','Georgia':'TBS',
+  'Armenia':'EVN','Azerbaijan':'GYD','Australia':'SYD','New Zealand':'AKL','Fiji':'NAN',
+  'Papua New Guinea':'POM','United Kingdom':'LHR','France':'CDG','Germany':'FRA',
+  'Italy':'FCO','Spain':'MAD','Netherlands':'AMS','Belgium':'BRU','Switzerland':'ZRH',
+  'Austria':'VIE','Portugal':'LIS','Ireland':'DUB','Sweden':'ARN','Norway':'OSL',
+  'Denmark':'CPH','Finland':'HEL','Poland':'WAW','Czech Republic':'PRG','Greece':'ATH',
+  'Hungary':'BUD','Romania':'BUH','Bulgaria':'SOF','Croatia':'ZAG','Serbia':'BEG',
+  'Ukraine':'KBP','Russia':'SVO','United States':'LAX','Canada':'YYZ','Mexico':'MEX',
+  'Brazil':'GRU','Argentina':'EZE','Chile':'SCL','Peru':'LIM','Colombia':'BOG',
+  'Venezuela':'CCS','Uruguay':'MVD','Paraguay':'ASU','Bolivia':'LPB','Ecuador':'UIO',
+  'Egypt':'CAI','Morocco':'CMN','Tunisia':'TUN','Algeria':'ALG','Libya':'TRI',
+  'South Africa':'JNB','Kenya':'NBO','Nigeria':'ABV','Ethiopia':'ADD','Ghana':'ACC',
+  'Tanzania':'DAR','Uganda':'EBB','Mauritius':'MRU','Seychelles':'SEZ','Maldives':'MLE',
+  'Fiji':'NAN','Cuba':'HAV','Jamaica':'KIN','Dominican Republic':'SDQ','Panama':'PTY',
+  'Costa Rica':'SJO','Guatemala':'GUA','Honduras':'TGU','Nicaragua':'MGA','El Salvador':'SAL'
+};
+
+// Build us.mytriv.com flight search affiliate URL for a destination
+function buildFlightCtaUrl(destIata) {
+  if (!destIata) return 'https://us.mytriv.com/?adults=1&locale=id';
+  const now = new Date();
+  const d = new Date(now); d.setDate(d.getDate() + 14);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const token = 'CGK' + dd + mm + destIata + '1';
+  const params = new URLSearchParams({
+    origin_iata: 'CGK',
+    destination_iata: destIata,
+    depart_date: `${yyyy}-${mm}-${dd}`,
+    adults: '1',
+    locale: 'id'
+  });
+  return `https://us.mytriv.com/?flightSearch=${token}&${params.toString()}`;
+}
+
+// Flight cross-sell CTA banner (top + bottom) for hotel pages.
+// Tracks via /go?partner=aviasales&flight=1 so clicks land in affiliate_clicks.
+function renderHotelFlightCta(destName, destIata, slug, position, en) {
+  if (!destName) return '';
+  const url = buildFlightCtaUrl(destIata);
+  const go = `/go?u=${encodeURIComponent(url)}&partner=aviasales&slug=${encodeURIComponent(slug)}&flight=1&hotel=1`;
+  const plane = '✈️';
+  if (position === 'top') {
+    const title = en
+      ? `${plane} Flying to ${destName}? Compare the best flights to ${destName}`
+      : `${plane} Terbang ke ${destName}? Bandingkan penerbangan terbaik ke ${destName}`;
+    const sub = en
+      ? 'Real-time prices from 500+ airlines via Aviasales. Search once, save up to 30%.'
+      : 'Harga real-time dari 500+ maskapai via Aviasales. Cari sekali, hemat hingga 30%.';
+    const btn = en ? 'Search Flights →' : 'Cari Penerbangan →';
+    return `<div class="seo-section hd-flight-cta-top" style="background:linear-gradient(135deg,rgba(0,240,255,.10),rgba(37,99,235,.14));border:1px solid rgba(0,240,255,.35);border-radius:14px;padding:18px 20px;margin:6px 0 0;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+      <div style="min-width:0;flex:1 1 260px;">
+        <div style="font-weight:800;font-size:15.5px;color:var(--txt);">${title}</div>
+        <div style="color:var(--mut);font-size:12.5px;margin-top:3px;">${sub}</div>
+      </div>
+      <a href="${go}" target="_blank" rel="noopener nofollow" style="flex-shrink:0;background:linear-gradient(135deg,var(--cy),#2563eb);color:#fff;border:none;border-radius:10px;padding:12px 22px;font-size:14px;font-weight:800;text-decoration:none;white-space:nowrap;box-shadow:0 4px 18px rgba(0,240,255,.25);">${btn}</a>
+    </div>`;
+  }
+  // bottom variant
+  const title = en
+    ? `${plane} Need flights to ${destName}? Compare and book the best prices.`
+    : `${plane} Butuh penerbangan ke ${destName}? Bandingkan & pesan harga terbaik.`;
+  const btn = en ? 'Compare Flight Prices →' : 'Bandingkan Harga Penerbangan →';
+  return `<div class="seo-section hd-flight-cta-bottom" style="margin:10px 0 0;text-align:center;background:linear-gradient(135deg,rgba(0,240,255,.08),rgba(16,185,129,.10));border:1px solid var(--border);border-radius:14px;padding:18px 16px;">
+    <div style="font-weight:800;font-size:15px;color:var(--txt);margin-bottom:10px;">${title}</div>
+    <a href="${go}" target="_blank" rel="noopener nofollow" style="display:inline-block;background:linear-gradient(135deg,var(--cy),#2563eb);color:#fff;border:none;border-radius:10px;padding:11px 20px;font-size:13.5px;font-weight:800;text-decoration:none;white-space:nowrap;">${btn}</a>
+  </div>`;
+}
+
 function amenities(h) {
   const list = [];
   if (h.wifi) list.push('WiFi Gratis');
@@ -1075,7 +1155,8 @@ module.exports = function createSeoRouter({ pool, generatePartnerLink }) {
     'hotels.com', 'www.hotels.com',
     'kayak.com', 'www.kayak.com',
     'klook.com', 'www.klook.com',
-    'tp.media', 'www.tp.media'
+    'tp.media', 'www.tp.media',
+    'us.mytriv.com', 'mytriv.com'
   ];
   router.get('/go', async (req, res) => {
     const { u, hotel, partner, slug } = req.query;
@@ -1207,7 +1288,8 @@ Sitemap: ${SITE}/sitemap.xml
       }
 
       // Aviasales: tiket termurah + rute populer dari kota hotel (silent-fail)
-      let hotelDealsSection = '', hotelPopularSection = '';
+      let hotelDealsSection = '', hotelPopularSection = '', hotelFlightCtaTop = '', hotelFlightCtaBottom = '';
+      let hotelDestIata = '';
       try {
         const hotelCityIata = await resolveCityIata(h.city_name || h.city || '');
         if (hotelCityIata) {
@@ -1218,7 +1300,11 @@ Sitemap: ${SITE}/sitemap.xml
           hotelDealsSection = renderHotelDealsSection(h.city_name || h.city || '', deals);
           hotelPopularSection = renderHotelPopularSection(h.city_name || h.city || '', popular);
         }
+        hotelDestIata = hotelCityIata || FLIGHT_CTA_COUNTRY_IATA[h.country_name || h.country] || '';
       } catch (e) { hotelDealsSection = ''; hotelPopularSection = ''; }
+      const hotelDestName = (h.city_name || h.city || h.country_name || h.country || '');
+      hotelFlightCtaTop = renderHotelFlightCta(hotelDestName, hotelDestIata, slug, 'top', false);
+      hotelFlightCtaBottom = renderHotelFlightCta(hotelDestName, hotelDestIata, slug, 'bottom', false);
 
       const title = `${h.name} — Harga & Booking ${loc} | MyTriv Hotels`;
       const desc = `Cek harga terbaik ${h.name} di ${loc}. ${am.slice(0, 4).join(', ')}. Bandingkan harga Booking.com, Agoda, Trip.com, Traveloka & Expedia. Booking online terpercaya.`;
@@ -1487,6 +1573,8 @@ const body = `
       </div>
     </div>
   </div>
+
+  ${hotelFlightCtaTop}
 
   <!-- LAYOUT: MAIN + STICKY SIDEBAR -->
   <div class="hd-layout">
@@ -2050,6 +2138,8 @@ ${similarHotels && similarHotels.length ? `
   <div style="text-align:center;margin-top:12px;"><a class="mini-cta" href="/maps/${citySlug}">Lihat Semua Hotel di ${esc(h.city_name || h.city || loc)} →</a></div>
 </section>` : ''}
 
+${hotelFlightCtaBottom}
+
 </div><!-- /.wrap -->
 </div><!-- /.hd-page -->
 
@@ -2207,6 +2297,16 @@ ${similarHotels && similarHotels.length ? `
         reviewsHtml = reviewSectionHtml(h, slug, 'en', req.user, { count: rvCount, avg: rvAvg }, rvList.rows);
       } catch (e) { /* reviews not ready */ }
 
+      // Flight cross-sell CTA (silent-fail) — destination follows hotel city/country
+      let enFlightCtaTop = '', enFlightCtaBottom = '', enDestIata = '';
+      try {
+        const enCityIata = await resolveCityIata(h.city_name || h.city || '');
+        enDestIata = enCityIata || FLIGHT_CTA_COUNTRY_IATA[h.country_name || h.country] || '';
+      } catch (e) { enDestIata = ''; }
+      const enDestName = (h.city_name || h.city || h.country_name || h.country || '');
+      enFlightCtaTop = renderHotelFlightCta(enDestName, enDestIata, slug, 'top', true);
+      enFlightCtaBottom = renderHotelFlightCta(enDestName, enDestIata, slug, 'bottom', true);
+
       const title = h.name + ' — Best Price & Booking ' + loc + ' | MyTriv Hotels';
       const desc = 'Check best prices for ' + h.name + ' in ' + loc + '. ' + am.slice(0, 3).join(', ') + '. Compare Booking.com, Agoda, Trip.com, Traveloka & more. Free booking, no extra fees.';
       const ogImage = hotelImage(h, 800);
@@ -2276,6 +2376,8 @@ ${similarHotels && similarHotels.length ? `
       </div>
     </div>
   </div>
+
+  ${enFlightCtaTop}
 
   <section class="seo-section">
     <h2>📋 ${esc(h.name)} — Summary</h2>
@@ -2647,6 +2749,8 @@ ${similarHotels && similarHotels.length ? `
 })();
 <\/script>
 
+${enFlightCtaBottom}
+
 </div>`;
 
       res.set('Cache-Control', 'private, no-cache'); res.set('Vary', 'Cookie');
@@ -2659,7 +2763,19 @@ ${similarHotels && similarHotels.length ? `
     try {
       const { country } = req.params;
       const { rows } = await pool.query('SELECT * FROM countries WHERE slug = $1', [country]);
-      if (!rows.length) return res.status(404).send('Not found');
+      if (!rows.length) {
+        // Try city slug: redirect /hotels/{city} -> /hotels/{country}/{city}
+        try {
+          const cityRes = await pool.query(`
+            SELECT c.slug AS city_slug, cc.slug AS country_slug
+            FROM cities c JOIN countries cc ON cc.code = c.country_code
+            WHERE c.slug = $1 LIMIT 1`, [country]);
+          if (cityRes.rows.length) {
+            return res.redirect(301, `/hotels/${cityRes.rows[0].country_slug}/${cityRes.rows[0].city_slug}`);
+          }
+        } catch (e) { console.error('city redirect lookup error:', e.message); }
+        return res.status(404).send('Not found');
+      }
       const c = rows[0];
       const cities = await pool.query('SELECT name, slug, hotel_count, lat, lng FROM cities WHERE country_code = $1 AND hotel_count > 0 ORDER BY hotel_count DESC, population DESC NULLS LAST LIMIT 60', [c.code]);
       const hotels = await pool.query(`SELECT h.name, h.slug, h.stars, h.rating, h.price_idr, h.image, c.name AS city_name FROM hotels h JOIN cities c ON c.id = h.city_id WHERE c.country_code = $1 ORDER BY h.rating DESC NULLS LAST LIMIT 12`, [c.code]);
@@ -2691,7 +2807,7 @@ ${similarHotels && similarHotels.length ? `
       <div class="lp-badge">🌍 Cari hotel terbaik · Bandingkan 8 OTA sekaligus</div>
       <h1>Hotel di <span>${esc(c.name)}</span><br>Bandingkan Harga &amp; Pesan</h1>
       <p>${desc}</p>
-      <form class="lp-search" action="/hotels/" method="get" onsubmit="event.preventDefault();var q=this.querySelector('input').value.trim();if(q)location.href='/hotels/'+q.toLowerCase().replace(/\\s+/g,'-');">
+      <form class="lp-search" action="/hotels/${country}/" method="get" onsubmit="event.preventDefault();var q=this.querySelector('input').value.trim();if(q)location.href='/hotels/${country}/'+encodeURIComponent(q.toLowerCase().replace(/\s+/g,'-'));">
         <input type="text" placeholder="Cari kota di ${esc(c.name)}... (contoh: bali, jakarta)" aria-label="Cari kota">
         <button type="submit">🔍 Cari Hotel</button>
       </form>
