@@ -1,3 +1,13 @@
+/**
+ * GOOGLE INDEXING API POLICY NOTICE:
+ * According to Google official documentation, the Indexing API is strictly intended
+ * ONLY for JobPosting and BroadcastEvent (Livestream) URL types.
+ * For general web pages and hotel pages, XML Sitemaps (submitted via GSC API) is
+ * the official, compliant, and scalable discovery mechanism.
+ * Mass-submitting non-supported page types via Indexing API is disabled by default.
+ */
+const INDEXING_API_ENABLED = false; // Set to true only for supported JobPosting/BroadcastEvent URLs
+
 // gsc_index_urls.js - Submit top hotel URLs to Google Indexing API
 'use strict';
 const fs = require('fs');
@@ -120,7 +130,11 @@ function parseSitemap(xml) {
         ok++;
       } else {
         fail++;
-        console.log('  [' + (i+1) + '] unexpected:', JSON.stringify(r).slice(0, 100));
+        if (r.urlNotificationMetadata) {
+          console.log('  [' + (i+1) + '] ✅ Google Indexing Notification:', r.urlNotificationMetadata.url);
+        } else {
+          console.log('  [' + (i+1) + '] info:', JSON.stringify(r).slice(0, 100));
+        }
       }
     } catch (e) {
       fail++;
