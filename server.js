@@ -1709,6 +1709,10 @@ app.get('/api/flights/search', (req, res) => {
     const destIata = destination ? String(destination).toUpperCase().slice(0, 3) : 'DPS';
     const adultsNum = parseInt(adults) || 1;
 
+    // Language-aware white-label host: en -> en.mytriv.com, otherwise us.mytriv.com
+    const localeStr = String(locale).toLowerCase();
+    const wlHost = localeStr === 'en' ? 'en.mytriv.com' : 'us.mytriv.com';
+
     // Build flightSearch token: {origin}{DDMM}{dest}{adults}  e.g. CGK1208DPS1
     let flightToken = originIata + destIata + String(adultsNum);
     if (depart_date && /^\d{4}-\d{2}-\d{2}$/.test(String(depart_date))) {
@@ -1729,9 +1733,9 @@ app.get('/api/flights/search', (req, res) => {
     };
 
     // Direct-results URL (skips 302, lands on tickets)
-    const resultsUrl = `https://us.mytriv.com/?flightSearch=${flightToken}&${new URLSearchParams(baseParams).toString()}`;
+    const resultsUrl = `https://${wlHost}/?flightSearch=${flightToken}&${new URLSearchParams(baseParams).toString()}`;
     // Iframe-friendly search form URL (pre-filled)
-    const formUrl = `https://us.mytriv.com/?${new URLSearchParams(baseParams).toString()}`;
+    const formUrl = `https://${wlHost}/?${new URLSearchParams(baseParams).toString()}`;
 
     res.json({
       status: 'ok',
@@ -1740,7 +1744,7 @@ app.get('/api/flights/search', (req, res) => {
       depart_date: depart_date || '',
       adults: adultsNum,
       marker_id: marker,
-      engine: 'us.mytriv.com',
+      engine: wlHost,
       flight_token: flightToken,
       target_url: resultsUrl,
       results_url: resultsUrl,
@@ -1781,19 +1785,32 @@ function writeAviaCache(path, deals) {
   } catch (e) {}
 }
 
+// Rewrite cached deep_links to the requested white-label host/locale (cache stores us.mytriv.com + locale=id)
+function localizeDeals(deals, wlHost, wlLocale) {
+  if (!Array.isArray(deals)) return deals;
+  return deals.map(d => {
+    if (!d || typeof d.deep_link !== 'string') return d;
+    return { ...d, deep_link: d.deep_link
+      .replace('us.mytriv.com', wlHost)
+      .replace(/locale=id/, 'locale=' + wlLocale) };
+  });
+}
+
 function formatIdr(value) { return value == null ? null : Math.round(Number(value)); }
 
 // GET Cheap flight deals (Aviasales Data API). Optional destination; one-way cache.
 app.get('/api/flights/deals', async (req, res) => {
   try {
-    const { origin = 'CGK', destination = '', currency = 'idr', limit = 18, period_type = 'month', refresh = '' } = req.query;
+    const { origin = 'CGK', destination = '', currency = 'idr', limit = 18, period_type = 'month', refresh = '', locale = 'id' } = req.query;
     const originIata = String(origin).toUpperCase().slice(0, 3);
     const destIata = destination ? String(destination).toUpperCase().slice(0, 3) : '';
+    const wlLocale = String(locale).toLowerCase() === 'en' ? 'en' : 'id';
+    const wlHost = wlLocale === 'en' ? 'en.mytriv.com' : 'us.mytriv.com';
 
     const cachePath = aviaCachePath(originIata, destIata || 'all');
     const cached = readAviaCache(cachePath);
     if (cached && !(refresh === '1' || refresh === 'true')) {
-      return res.json({ status: 'ok', source: 'cache', origin: originIata, destination: destIata, currency, total: cached.length, deals: cached });
+      return res.json({ status: 'ok', source: 'cache', origin: originIata, destination: destIata, currency, total: cached.length, deals: localizeDeals(cached, wlHost, wlLocale) });
     }
 
     const params = new URLSearchParams({
@@ -1836,7 +1853,7 @@ app.get('/api/flights/deals', async (req, res) => {
         destination_iata: destCode,
         depart_date: ddStr,
         adults: '1',
-        locale: 'id'
+        locale: wlLocale
       });
       return {
         origin: d.origin, destination: d.destination,
@@ -1846,7 +1863,7 @@ app.get('/api/flights/deals', async (req, res) => {
         airline: d.airline || null, flight_number: d.flight_number || null,
         duration: d.duration || null,
         platform: d.gate || 'Aviasales',
-        deep_link: `https://us.mytriv.com/?flightSearch=${flightToken}&${wlParams.toString()}`
+        deep_link: `https://${wlHost}/?flightSearch=${flightToken}&${wlParams.toString()}`
       };
     });
 
@@ -1860,11 +1877,13 @@ app.get('/api/flights/deals', async (req, res) => {
 // GET Popular routes + cheap deals per city (Aviasales Data API, cached 6h)
 app.get('/api/flights/popular', async (req, res) => {
   try {
-    const { origin = 'CGK', currency = 'idr', limit = 8 } = req.query;
+    const { origin = 'CGK', currency = 'idr', limit = 8, locale = 'id' } = req.query;
     const originIata = String(origin).toUpperCase().slice(0, 3);
+    const wlLocale = String(locale).toLowerCase() === 'en' ? 'en' : 'id';
+    const wlHost = wlLocale === 'en' ? 'en.mytriv.com' : 'us.mytriv.com';
     const cachePath = `/tmp/aviasales_popular_${originIata.toLowerCase()}.json`;
     const cached = readAviaCache(cachePath);
-    if (cached) return res.json({ status: 'ok', source: 'cache', origin: originIata, currency, total: cached.length, routes: cached });
+    if (cached) return res.json({ status: 'ok', source: 'cache', origin: originIata, currency, total: cached.length, routes: localizeDeals(cached, wlHost, wlLocale) });
 
     const params = new URLSearchParams({
       origin: originIata,
@@ -1899,7 +1918,7 @@ app.get('/api/flights/popular', async (req, res) => {
         destination_iata: d.destination || 'X',
         depart_date: ddStr,
         adults: '1',
-        locale: 'id'
+        locale: wlLocale
       });
       return {
         destination: d.destination,
@@ -1907,7 +1926,7 @@ app.get('/api/flights/popular', async (req, res) => {
         number_of_changes: d.number_of_changes ?? 0,
         platform: d.gate || 'Aviasales',
         depart_date: d.depart_date,
-        deep_link: `https://us.mytriv.com/?flightSearch=${flightToken}&${wlParams.toString()}`
+        deep_link: `https://${wlHost}/?flightSearch=${flightToken}&${wlParams.toString()}`
       };
     });
 

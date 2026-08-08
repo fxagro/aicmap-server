@@ -272,9 +272,11 @@ const FLIGHT_CTA_COUNTRY_IATA = {
   'Costa Rica':'SJO','Guatemala':'GUA','Honduras':'TGU','Nicaragua':'MGA','El Salvador':'SAL'
 };
 
-// Build us.mytriv.com flight search affiliate URL for a destination
-function buildFlightCtaUrl(destIata) {
-  if (!destIata) return 'https://us.mytriv.com/?adults=1&locale=id';
+// Build us.mytriv.com (ID) / en.mytriv.com (EN) flight search affiliate URL for a destination
+function buildFlightCtaUrl(destIata, en) {
+  const host = en ? 'en.mytriv.com' : 'us.mytriv.com';
+  const locale = en ? 'en' : 'id';
+  if (!destIata) return `https://${host}/?adults=1&locale=${locale}`;
   const now = new Date();
   const d = new Date(now); d.setDate(d.getDate() + 14);
   const dd = String(d.getDate()).padStart(2, '0');
@@ -286,16 +288,16 @@ function buildFlightCtaUrl(destIata) {
     destination_iata: destIata,
     depart_date: `${yyyy}-${mm}-${dd}`,
     adults: '1',
-    locale: 'id'
+    locale: locale
   });
-  return `https://us.mytriv.com/?flightSearch=${token}&${params.toString()}`;
+  return `https://${host}/?flightSearch=${token}&${params.toString()}`;
 }
 
 // Flight cross-sell CTA banner (top + bottom) for hotel pages.
 // Tracks via /go?partner=aviasales&flight=1 so clicks land in affiliate_clicks.
 function renderHotelFlightCta(destName, destIata, slug, position, en) {
   if (!destName) return '';
-  const url = buildFlightCtaUrl(destIata);
+  const url = buildFlightCtaUrl(destIata, en);
   const go = `/go?u=${encodeURIComponent(url)}&partner=aviasales&slug=${encodeURIComponent(slug)}&flight=1&hotel=1`;
   const plane = '✈️';
   if (position === 'top') {
@@ -572,15 +574,35 @@ function shell({ title, desc, canonical, ogImage, body, schema, lang = 'id', use
 <meta name="twitter:description" content="${desc}">
 <meta name="twitter:image" content="${ogImage}">
 <meta name="robots" content="index,follow">
+<script>
+(function() {
+  try {
+    var p = new URLSearchParams(location.search);
+    if (p.has('dev') || p.has('test')) {
+      if (p.get('dev') === '0' || p.get('test') === '0') {
+        localStorage.removeItem('mytriv_dev_mode');
+      } else {
+        localStorage.setItem('mytriv_dev_mode', 'true');
+      }
+    }
+    if (localStorage.getItem('mytriv_dev_mode') === 'true' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      window['ga-disable-G-5QCP5QF51T'] = true;
+      console.log('[MyTriv Analytics] Internal Dev/Test Mode ACTIVE - GA4 tracking disabled for this session.');
+    }
+  } catch(e){}
+})();
+</script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-5QCP5QF51T"></script>
 <script>
 window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
-gtag('config', 'G-5QCP5QF51T', { send_page_view: true, cookie_flags: 'SameSite=None;Secure' });
+if (!window['ga-disable-G-5QCP5QF51T']) {
+  gtag('config', 'G-5QCP5QF51T', { send_page_view: true, cookie_flags: 'SameSite=None;Secure' });
+}
 document.addEventListener('click', function(e) {
   var el = e.target.closest('a[href*="/go?u="]');
-  if (el) {
+  if (el && !window['ga-disable-G-5QCP5QF51T']) {
     var partner = el.className.match(/booking|agoda|traveloka|trip\.com|expedia/) || ['unknown'];
     gtag('event', 'booking_click', { partner: partner[0], hotel: location.pathname.split('/').pop(), outbound_url: el.href });
   }
@@ -1156,7 +1178,7 @@ module.exports = function createSeoRouter({ pool, generatePartnerLink }) {
     'kayak.com', 'www.kayak.com',
     'klook.com', 'www.klook.com',
     'tp.media', 'www.tp.media',
-    'us.mytriv.com', 'mytriv.com'
+    'us.mytriv.com', 'en.mytriv.com', 'mytriv.com'
   ];
   router.get('/go', async (req, res) => {
     const { u, hotel, partner, slug } = req.query;
